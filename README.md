@@ -1,148 +1,172 @@
-╔══════════════════════════════════════════════════════════════╗
-║       RAPTOR: THREAT ANALYZER  — SETUP GUIDE                ║
-║       Moksh Shah | 250103003015 | MSc DFIS Sem 2 | NFSU     ║
-║       Guide: Dr. Ramya Shah | Assistant Professor           ║
-╚══════════════════════════════════════════════════════════════╝
+# 🦅 RAPTOR — Threat Analyzer
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PROJECT STRUCTURE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RAPTOR is a modular static analysis platform designed to support **SOC triage, incident response, and threat intelligence workflows** by analyzing suspicious artifacts such as files, scripts, URLs, and emails.
 
-RAPTOR_4518 (2)/
-├── backend/
-│   └── app.py              ← Flask REST API (Python)
-├── frontend/
-│   └── index.html          ← Main UI (connects to backend)
-├── database/               ← SQLite DB auto-created here
-├── uploads/                ← Temp file storage
-├── requirements.txt        ← Python dependencies
-└── README.txt              ← This file
+The platform uses a **rule-based detection engine (100+ rules)** combined with heuristic and entropy-based analysis to identify malicious behavior and map it to **MITRE ATT&CK techniques**.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-QUICK START (3 steps)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
 
-STEP 1 — Install Python dependencies
-    pip install -r requirements.txt
-    OR
-    pip install flask flask-cors requests scikit-learn numpy pandas
+## 🧠 Analytical Scope
 
-STEP 2 — Start the backend
-    cd "RAPTOR_4518 (2)/backend"
-    python app.py
+RAPTOR focuses on **pre-execution threat analysis**, enabling analysts to:
 
-    You should see:
-    ╔══════════════════════════════╗
-    ║  BACKEND RUNNING             ║
-    ║  Open: http://localhost:5000 ║
-    ╚══════════════════════════════╝
+* Perform static inspection of suspicious artifacts
+* Detect obfuscation, encoding, and staged payload delivery
+* Extract and correlate Indicators of Compromise (IOCs)
+* Map behaviors to MITRE ATT&CK techniques
+* Support SOC-level triage and investigation workflows
 
-STEP 3 — Open the app
-    Option A (recommended): Open http://localhost:5000
-    Option B (standalone):  Open frontend/index.html directly in browser
-                            (works without backend, local mode only)
+---
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MODES OF OPERATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 🔥 Detection Engine
 
-  ✅ API MODE (Flask running):
-     - All scans saved to SQLite database permanently
-     - Dashboard shows real database statistics
-     - Scan history persists across browser sessions
-     - VirusTotal + AbuseIPDB lookups (if API keys set)
-     - Header shows: ● API ONLINE (green)
+* **100+ heuristic and signature-based rules**
+* Regex-based pattern matching with behavioral indicators
+* Entropy analysis for detecting encoded/packed payloads
+* Multi-layer decoding support
+* Coverage includes:
 
-  ⚡ LOCAL MODE (no Flask):
-     - All analysis runs in browser (JavaScript)
-     - No persistent storage (history lost on refresh)
-     - Still fully functional for ZIP/PS/URL analysis
-     - PDF export still works
-     - Header shows: ● LOCAL MODE (orange)
+  * Execution flags & evasion techniques
+  * Network-based payload delivery
+  * Persistence mechanisms
+  * Suspicious file and URL patterns
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OPTIONAL: VirusTotal API
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
 
-1. Go to https://www.virustotal.com and create a free account
-2. Go to your profile → API Key
-3. Set it before running the backend:
+## ⚙️ Core Modules
 
-   Windows (PowerShell):
-       $env:VT_API_KEY = "your_key_here"
-       python app.py
+### 📦 Archive & File Analyzer
 
-   Linux/Mac:
-       export VT_API_KEY="your_key_here"
-       python app.py
+* Recursive ZIP extraction
+* Detection of embedded payloads
+* Suspicious file classification
 
-   OR edit app.py line 29:
-       VT_API_KEY = "your_key_here"
+---
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-API ENDPOINTS (Flask Backend)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+### ⚡ PowerShell Analysis Engine
 
-  POST  /api/scan/zip          Upload and scan a ZIP file
-  POST  /api/scan/ps           Decode and analyze PowerShell
-  POST  /api/scan/url          Analyze a URL for phishing
-  POST  /api/extract/iocs      Extract IOCs from raw text
-  POST  /api/scan/headers      Paste raw email headers → full analysis
-  POST  /api/whois             Domain/URL → RDAP age + registrar info
-  POST  /api/vt/hash           MD5/SHA1/SHA256 → full VT engine report
+* Supports **text input + file upload (.ps1, .txt, logs)**
+* Multi-layer decoding (Base64 / obfuscation handling)
+* Detects execution flags:
 
-  GET   /api/history           Get all scan history
-  GET   /api/history/<id>      Get single scan details
-  GET   /api/stats             Dashboard statistics
-  GET   /api/search/ioc?q=xx   Search IOC database
-  GET   /api/health            Backend health check
+  * `-EncodedCommand`, `-NoProfile`, `-WindowStyle Hidden`, `-NonInteractive`
+* Identifies:
 
-  DELETE /api/history/<id>     Delete a scan record
+  * Droppers
+  * Remote payload loaders
+  * Staged execution chains
+* Extracts embedded IOCs (URLs, IPs, commands)
+* Entropy-based detection of encoded payloads
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FEATURES 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
 
-  [✅] ZIP Scanner     — JSZip extraction, deep inspection of all file types
-  [✅] PS Decoder      — Multi-layer (5-stage) decoding engine with 100+ detection rules
-                        combining signature-based, heuristic, and behavioral analysis
-  [✅] URL Analyzer    — phishing detection, redirect chain tracking, risk scoring
-  [✅] IOC Extractor   — 9+ IOC types including dark web indicators
-  [✅] Header Analyzer — SPF/DKIM/DMARC parsing, hop trace, originating IP detection
-  [✅] WHOIS/Age Check — RDAP lookup, domain age analysis, new-domain risk flagging
-  [✅] Hash Lookup     — VirusTotal engine report (MD5/SHA1/SHA256) with caching
-  [✅] MITRE ATT&CK    — Comprehensive mapping to multiple MITRE tactics & techniques
-  [✅] Entropy Scoring — Shannon entropy analysis for payload detection
-  [✅] Advanced Detection Engine — Hybrid rule-based system with 100+ indicators
-  [✅] Flask Backend   — REST API with full scan processing
-  [✅] SQLite Database — persistent storage (scans, IOCs, files, MITRE hits)
-  [✅] Dashboard       — real-time analytics from database
-  [✅] PDF Export      — per-scan and full-session export
-  [✅] Scan History    — persistent sidebar history tracking
-  [✅] Dual Mode       — works with or without backend
-  [✅] VirusTotal API  — integrated threat intelligence (API key required)
-  [✅] Syntax Highlight — color-coded PowerShell decoding output
-  [✅] IOC Copy        — one-click export of indicators
+### 🌐 URL Intelligence Module
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NEW IN v7
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+* Redirect chain analysis
+* Phishing detection:
 
-  [✅] Email Header Analyzer — advanced parsing with authentication checks
-  [✅] WHOIS / Domain Intelligence — registrar, expiry, domain age detection
-  [✅] VirusTotal Hash Intelligence — full engine detection breakdown
-  [✅] Dark Web IOC Detection — onion links, Telegram, paste services, anonymous hosts
-  [✅] Enhanced Rule Engine — expanded from basic rules to 100+ detection indicators
+  * Brand impersonation
+  * Suspicious TLDs
+  * Parameter abuse (`cmd=`, `b64=`)
+* Risk scoring based on indicators
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NOTES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
 
-⚠️ IMPORTANT:
-Use quotes when navigating folder:
+### 📧 Email Threat Analyzer
 
-    cd "RAPTOR_4518 (2)/backend"
+* Header validation (SPF, DKIM, DMARC)
+* Spoofing & impersonation detection
+* Attachment risk analysis
+* Credential harvesting pattern detection
 
-Without quotes → command will fail due to space + parentheses.
+---
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+### 🧬 IOC Extraction Engine
+
+* IP addresses
+* Domains
+* URLs
+* Hashes
+* Email addresses
+
+---
+
+## 🎯 MITRE ATT&CK Integration
+
+Automatically maps detected behaviors to techniques such as:
+
+* T1059 — Command Execution
+* T1027 — Obfuscated/Encoded Files
+* T1105 — Ingress Tool Transfer
+* T1562 — Defense Evasion
+* T1218 — Signed Binary Proxy Execution
+
+---
+
+## 📊 Platform Capabilities
+
+* 📁 **Dual Input Support** — Analyze via direct input or file upload
+* Centralized dashboard with:
+
+  * Threat scoring
+  * IOC aggregation
+  * MITRE technique tracking
+* Structured outputs for analyst workflows
+* Lightweight and extensible design
+
+---
+
+## 🛠️ Technology Stack
+
+* **Backend:** Flask (Python)
+* **Frontend:** HTML, CSS, JavaScript
+* **Database:** SQLite
+* **Detection:** Rule-based + Heuristic + Entropy
+
+---
+
+## 📂 Project Structure
+
+```
+RAPTOR-Threat-Analyzer/
+│
+├── backend/        # Analysis engine & API
+├── frontend/       # UI layer
+├── database/       # Local DB (excluded in production)
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## ⚙️ Setup Instructions
+
+```bash
+git clone https://github.com/your-username/RAPTOR-Threat-Analyzer.git
+cd RAPTOR-Threat-Analyzer
+pip install -r requirements.txt
+python backend/app.py
+```
+
+---
+
+## 📌 Use Cases
+
+* SOC triage & alert investigation
+* Malware static analysis
+* Phishing analysis
+* Threat intelligence enrichment
+* Cybersecurity research & learning
+
+---
+
+## ⚠️ Disclaimer
+
+This project is intended for **educational, research, and defensive security purposes only**.
+
+---
+
+## 👨‍💻 Author
+
+**Moksh Shah**
+M.Sc. Digital Forensics & Information Security
